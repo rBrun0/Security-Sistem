@@ -1,36 +1,111 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🦺 Sistema de Gestão SST
 
-## Getting Started
+Sistema web para gestão de Segurança do Trabalho, permitindo controle de:
 
-First, run the development server:
+- Ambientes
+- Funcionários
+- Inspeções
+- Treinamentos
+- Instrutores
+- (em desenvolvimento) Estoque de EPIs
+
+---
+
+## 🚀 Tecnologias Utilizadas
+
+- **React + TypeScript**
+- **Next.js**
+- **Firebase (Firestore)**
+- **React Hook Form**
+- **Zod**
+- **TanStack Query**
+- **ShadCN UI**
+- **Tailwind CSS**
+
+---
+
+## 📦 Módulos do Sistema
+
+### 🏗 Ambientes
+- Cadastro e gerenciamento de ambientes/obras
+- Status (ativo, concluído, pausado)
+- Visualização de colaboradores vinculados
+
+### 👷 Funcionários
+- Cadastro completo de colaboradores
+- Vínculo com empresa e ambiente
+- Controle de status
+
+### 🔍 Inspeções
+- Criação de inspeções por ambiente
+- Itens de inspeção (conforme / não conforme)
+- Cálculo automático de conformidade
+- Relatório com exportação CSV
+- Impressão de relatório
+
+### 🎓 Treinamentos
+- Modelos de treinamento (NRs)
+- Conteúdo programático automático
+- Carga horária
+- Instrutor vinculado
+
+### 👨‍🏫 Instrutores
+- Cadastro completo
+- Registros profissionais (CREA, CRM, MTE etc.)
+- Qualificações
+
+### 📦 Estoque (Em desenvolvimento)
+- Controle de produtos/EPI
+- Movimentações
+- Histórico
+
+---
+
+## 🧠 Arquitetura
+
+O projeto segue uma organização modular:
+
+- modules/
+- environments/
+- employees/
+- inspections/
+- trainings/
+- instructors/
+
+- 
+Cada módulo possui:
+
+- types
+- services
+- hooks
+- components
+
+Separação clara entre:
+- Camada de UI
+- Regras de negócio
+- Acesso a dados
+
+---
+
+## 🔐 Autenticação
+
+Em desenvolvimento.
+Será implementada utilizando Firebase Authentication.
+
+---
+
+## ⚙️ Instalação e Execução
 
 ```bash
+# Clone o repositório
+git clone https://github.com/seu-usuario/seu-repo.git
+
+# Acesse a pasta
+cd nome-do-projeto
+
+# Instale as dependências
+npm install
+
+# Rode o projeto
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
-
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
-
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
