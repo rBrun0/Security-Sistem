@@ -1,10 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,19 +29,23 @@ import {
   Search,
   Eye,
   Clock,
-  MapPin,
-  Users,
   User,
   FileText,
   Building2,
 } from "lucide-react";
-import { createPageUrl } from "@/lib/utils";
+import Link from "next/link";
 import { Form } from "@/components/ui/form";
 import { FormInput } from "@/src/components/form/form-input";
 import { FormSelect } from "@/src/components/form/form-select";
 import { FormTextarea } from "@/src/components/form/form-textarea";
 import { FormDatePicker } from "@/src/components/form/form-date-picker";
 import { toast } from "sonner";
+import { useInstructors } from "../../modules/instructors/hooks";
+import { useTechnicalResponsibles } from "../../modules/responsaveistecnicos/hooks";
+import { useTrainingModels } from "../../modules/models/hooks";
+import { TrainingModel } from "../../modules/models/types";
+import { useEnvironments } from "../../modules/enviroments/hooks";
+import { useCreateTraining, useTrainings } from "../../modules/trainings/hooks";
 
 export default function TreinamentosPage() {
   const [isOpen, setIsOpen] = useState(false);
@@ -85,45 +88,17 @@ export default function TreinamentosPage() {
     },
   });
 
-  const queryClient = useQueryClient();
+  const { data: treinamentos = [], isLoading } = useTrainings();
 
-  const { data: treinamentos = [], isLoading } = useQuery({
-    queryKey: ["treinamentos"],
-    queryFn: () => base44.entities.Treinamento.list("-created_date"),
-  });
+  const { data: modelos = [] } = useTrainingModels();
 
-  const { data: modelos = [] } = useQuery({
-    queryKey: ["modelos-treinamento"],
-    queryFn: () => base44.entities.ModeloTreinamento.list(),
-  });
+  // Fetch instructors and technical responsibles via services/hooks
+  const { data: instrutores = [] } = useInstructors();
+  const { data: responsaveis = [] } = useTechnicalResponsibles();
 
-  const { data: instrutores = [] } = useQuery({
-    queryKey: ["instrutores"],
-    queryFn: () => base44.entities.Instrutor.list(),
-  });
+  const { data: ambientes = [] } = useEnvironments();
 
-  const { data: responsaveis = [] } = useQuery({
-    queryKey: ["responsaveis-tecnicos"],
-    queryFn: () => base44.entities.ResponsavelTecnico.list(),
-  });
-
-  const { data: ambientes = [] } = useQuery({
-    queryKey: ["ambientes"],
-    queryFn: () => base44.entities.Ambiente.list(),
-  });
-
-  const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.Treinamento.create(data),
-    onSuccess: (newTreinamento) => {
-      queryClient.invalidateQueries({ queryKey: ["treinamentos"] });
-      setIsOpen(false);
-      resetForm();
-      toast.success("Turma criada com sucesso!");
-      window.location.href = createPageUrl(
-        `TreinamentoDetalhe?id=${newTreinamento.id}`,
-      );
-    },
-  });
+  const createMutation = useCreateTraining();
 
   const resetForm = () => {
     setSelectedModelo("");
@@ -143,60 +118,72 @@ export default function TreinamentosPage() {
     });
   };
 
-  const handleModeloChange = (modeloId) => {
+  const handleModeloChange = (modeloId: string) => {
     setSelectedModelo(modeloId);
-    const modelo = modelos.find((m) => m.id === modeloId);
+    const modelo = modelos.find((m: TrainingModel) => m.id === modeloId);
     if (modelo) {
       form.reset({
-        title: modelo.nome,
-        standard: modelo.norma,
-        program_content: modelo.conteudo_programatico,
-        workload: modelo.carga_horaria,
+        title: modelo.name || "",
+        standard: modelo.standard || "",
+        program_content: modelo.programContent || "",
+        workload: modelo.workload || "",
         location: form.getValues("location"),
         event_date: form.getValues("event_date"),
         event_time: form.getValues("event_time"),
-        modality: modelo.modalidade || "presencial",
-        instructor_id: modelo.instrutor_id || "",
-        responsible_technical_id: modelo.responsavel_tecnico_id || "",
-        certificate_model: modelo.modelo_certificado || "modelo1",
+        modality: modelo.modality || "presencial",
+        instructor_id: modelo.instructorId || "",
+        responsible_technical_id: modelo.technicalResponsibleId || "",
+        certificate_model: modelo.certificateModel || "modelo1",
         environment_id: form.getValues("environment_id"),
       });
     }
   };
 
   const onSubmit = (data: TurmaFormData) => {
-    const ambiente = ambientes.find((a) => a.id === data.environment_id);
+    const ambiente = ambientes.find(
+      (environment) => environment.id === data.environment_id,
+    );
     const instrutor = instrutores.find((i) => i.id === data.instructor_id);
     const responsavel = responsaveis.find(
       (r) => r.id === data.responsible_technical_id,
     );
 
-    createMutation.mutate({
-      titulo: data.title,
-      norma: data.standard,
-      conteudo_programatico: data.program_content,
-      carga_horaria: data.workload,
-      local: data.location,
-      data_realizacao: data.event_date,
-      horario: data.event_time,
-      modalidade: data.modality,
-      instrutor_id: data.instructor_id,
-      instrutor_nome: instrutor?.nome,
-      responsavel_tecnico_id: data.responsible_technical_id,
-      responsavel_tecnico_nome: responsavel?.nome,
-      modelo_certificado: data.certificate_model,
-      ambiente_id: data.environment_id,
-      ambiente_nome: ambiente?.nome,
-      status: "agendado",
-    });
+    createMutation.mutate(
+      {
+        title: data.title,
+        standard: data.standard,
+        programContent: data.program_content,
+        workload: data.workload,
+        location: data.location,
+        eventDate: data.event_date,
+        eventTime: data.event_time,
+        modality: data.modality,
+        instructorId: data.instructor_id,
+        instructorName: instrutor?.name,
+        technicalResponsibleId: data.responsible_technical_id,
+        technicalResponsibleName: responsavel?.name,
+        certificateModel: data.certificate_model,
+        environmentId: data.environment_id,
+        environmentName: ambiente?.name,
+        status: "scheduled",
+      },
+      {
+        onSuccess: (newTraining) => {
+          setIsOpen(false);
+          resetForm();
+          toast.success("Turma criada com sucesso!");
+          window.location.assign(`/treinamento/turmas/${newTraining.id}`);
+        },
+      },
+    );
   };
 
   const filteredTreinamentos = treinamentos.filter((t) => {
     const matchSearch =
-      t.titulo?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.norma?.toLowerCase().includes(searchTerm.toLowerCase());
+      t.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      t.standard?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchModalidade =
-      filterModalidade === "todas" || t.modalidade === filterModalidade;
+      filterModalidade === "todas" || t.modality === filterModalidade;
     return matchSearch && matchModalidade;
   });
 
@@ -207,9 +194,9 @@ export default function TreinamentosPage() {
   };
 
   const statusColors = {
-    agendado: "bg-amber-100 text-amber-700",
-    em_andamento: "bg-blue-100 text-blue-700",
-    concluido: "bg-green-100 text-green-700",
+    scheduled: "bg-amber-100 text-amber-700",
+    in_progress: "bg-blue-100 text-blue-700",
+    completed: "bg-green-100 text-green-700",
   };
 
   return (
@@ -252,14 +239,16 @@ export default function TreinamentosPage() {
                         <SelectValue placeholder="Selecione um modelo para preencher automaticamente" />
                       </SelectTrigger>
                       <SelectContent>
-                        {modelos.map((m) => (
-                          <SelectItem key={m.id} value={m.id}>
-                            <div className="flex items-center gap-2">
-                              <FileText className="w-4 h-4" />
-                              {m.nome}
-                            </div>
-                          </SelectItem>
-                        ))}
+                        {modelos
+                          .filter((m: TrainingModel) => Boolean(m.id))
+                          .map((m: TrainingModel) => (
+                            <SelectItem key={m.id} value={m.id as string}>
+                              <div className="flex items-center gap-2">
+                                <FileText className="w-4 h-4" />
+                                {m.name}
+                              </div>
+                            </SelectItem>
+                          ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -321,10 +310,10 @@ export default function TreinamentosPage() {
                   label="Ambiente (Obra)"
                   control={form.control}
                   options={ambientes
-                    .filter((a) => a.status === "ativo")
-                    .map((a) => ({
-                      label: a.nome,
-                      value: a.id,
+                    .filter((environment) => environment.status === "active")
+                    .map((environment) => ({
+                      label: environment.name || "Sem nome",
+                      value: environment.id,
                     }))}
                 />
 
@@ -339,19 +328,23 @@ export default function TreinamentosPage() {
                     name="instructor_id"
                     label="Instrutor"
                     control={form.control}
-                    options={instrutores.map((i) => ({
-                      label: i.nome,
-                      value: i.id,
-                    }))}
+                    options={instrutores
+                      .filter((i) => Boolean(i.id))
+                      .map((i) => ({
+                        label: i.name || "Sem nome",
+                        value: i.id as string,
+                      }))}
                   />
                   <FormSelect
                     name="responsible_technical_id"
                     label="Responsável Técnico"
                     control={form.control}
-                    options={responsaveis.map((r) => ({
-                      label: r.nome,
-                      value: r.id,
-                    }))}
+                    options={responsaveis
+                      .filter((r) => Boolean(r.id))
+                      .map((r) => ({
+                        label: r.name || "Sem nome",
+                        value: r.id as string,
+                      }))}
                   />
                 </div>
 
@@ -436,7 +429,7 @@ export default function TreinamentosPage() {
           {filteredTreinamentos.map((treinamento) => (
             <Link
               key={treinamento.id}
-              to={createPageUrl(`TreinamentoDetalhe?id=${treinamento.id}`)}
+              href={`/treinamento/turmas/${treinamento.id}`}
             >
               <Card className="hover:shadow-lg transition-all duration-300 border-0 shadow-md cursor-pointer group h-full">
                 <CardHeader className="pb-2">
@@ -447,22 +440,32 @@ export default function TreinamentosPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <CardTitle className="text-base group-hover:text-purple-600 transition-colors truncate">
-                          {treinamento.titulo}
+                          {treinamento.title}
                         </CardTitle>
                         <div className="flex flex-wrap gap-1 mt-1">
                           <Badge
-                            className={modalidadeColors[treinamento.modalidade]}
+                            className={
+                              modalidadeColors[
+                                treinamento.modality as keyof typeof modalidadeColors
+                              ]
+                            }
                           >
-                            {treinamento.modalidade === "ead"
+                            {treinamento.modality === "ead"
                               ? "EAD"
-                              : treinamento.modalidade === "presencial"
+                              : treinamento.modality === "presencial"
                                 ? "Presencial"
                                 : "Semipresencial"}
                           </Badge>
-                          <Badge className={statusColors[treinamento.status]}>
-                            {treinamento.status === "agendado"
+                          <Badge
+                            className={
+                              statusColors[
+                                treinamento.status as keyof typeof statusColors
+                              ]
+                            }
+                          >
+                            {treinamento.status === "scheduled"
                               ? "Agendado"
-                              : treinamento.status === "em_andamento"
+                              : treinamento.status === "in_progress"
                                 ? "Em Andamento"
                                 : "Concluído"}
                           </Badge>
@@ -472,33 +475,33 @@ export default function TreinamentosPage() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  {treinamento.data_realizacao && (
+                  {treinamento.eventDate && (
                     <div className="flex items-center gap-2 text-sm text-slate-500">
                       <Calendar className="w-4 h-4" />
                       <span>
-                        {treinamento.data_realizacao}{" "}
-                        {treinamento.horario && `• ${treinamento.horario}`}
+                        {treinamento.eventDate}{" "}
+                        {treinamento.eventTime && `• ${treinamento.eventTime}`}
                       </span>
                     </div>
                   )}
-                  {treinamento.carga_horaria && (
+                  {treinamento.workload && (
                     <div className="flex items-center gap-2 text-sm text-slate-500">
                       <Clock className="w-4 h-4" />
-                      <span>{treinamento.carga_horaria}</span>
+                      <span>{treinamento.workload}</span>
                     </div>
                   )}
-                  {(treinamento.local || treinamento.ambiente_nome) && (
+                  {(treinamento.location || treinamento.environmentName) && (
                     <div className="flex items-center gap-2 text-sm text-slate-500">
                       <Building2 className="w-4 h-4" />
                       <span className="truncate">
-                        {treinamento.ambiente_nome || treinamento.local}
+                        {treinamento.environmentName || treinamento.location}
                       </span>
                     </div>
                   )}
-                  {treinamento.instrutor_nome && (
+                  {treinamento.instructorName && (
                     <div className="flex items-center gap-2 text-sm text-slate-500">
                       <User className="w-4 h-4" />
-                      <span>{treinamento.instrutor_nome}</span>
+                      <span>{treinamento.instructorName}</span>
                     </div>
                   )}
                   <div className="pt-2 flex items-center justify-end">

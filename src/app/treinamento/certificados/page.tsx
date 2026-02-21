@@ -1,8 +1,7 @@
 "use client";
 
-import React, { useState, useRef } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useMemo, useState } from "react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -11,75 +10,69 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import {
   ArrowLeft,
   Award,
   Printer,
   FileText,
-  User,
   Calendar,
   Clock,
   MapPin,
-  Download,
   Loader2,
 } from "lucide-react";
 import { createPageUrl } from "@/lib/utils";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { useTrainings, useTraining } from "@/src/app/modules/trainings/hooks";
+import { useTrainingParticipants } from "@/src/app/modules/training-participants/hooks";
+import { useInstructors } from "@/src/app/modules/instructors/hooks";
+import { useTechnicalResponsibles } from "@/src/app/modules/responsaveistecnicos/hooks";
 
 export default function CertificadosPage() {
-  const urlParams = new URLSearchParams(window.location.search);
-  const treinamentoIdParam = urlParams.get("treinamento_id");
-
-  const [selectedTreinamento, setSelectedTreinamento] = useState(
-    treinamentoIdParam || "",
-  );
+  const searchParams = useSearchParams();
+  const treinamentoIdParam = searchParams.get("treinamento_id") || "";
+  const [selectedTreinamento, setSelectedTreinamento] = useState("");
   const [selectedParticipante, setSelectedParticipante] = useState("");
-  const [viewMode, setViewMode] = useState("certificado"); // certificado ou ata
-  const printRef = useRef(null);
+  const [viewMode, setViewMode] = useState("certificado");
 
-  const { data: treinamentos = [] } = useQuery({
-    queryKey: ["treinamentos"],
-    queryFn: () => base44.entities.Treinamento.list(),
-  });
+  console.log("Treinamento ID do parâmetro:", treinamentoIdParam);
 
-  const { data: treinamento } = useQuery({
-    queryKey: ["treinamento", selectedTreinamento],
-    queryFn: () =>
-      base44.entities.Treinamento.filter({ id: selectedTreinamento }).then(
-        (r) => r[0],
-      ),
-    enabled: !!selectedTreinamento,
-  });
+  const currentTreinamentoId = selectedTreinamento || treinamentoIdParam;
 
-  const { data: participantes = [] } = useQuery({
-    queryKey: ["participantes", selectedTreinamento],
-    queryFn: () =>
-      base44.entities.Participante.filter({
-        treinamento_id: selectedTreinamento,
-      }),
-    enabled: !!selectedTreinamento,
-  });
+  const { data: treinamentos = [], isLoading: loadingTrainings } =
+    useTrainings();
+  const { data: treinamento, isLoading: loadingTreinamento } = useTraining(
+    currentTreinamentoId || undefined,
+  );
+  const { data: participantes = [], isLoading: loadingParticipantes } =
+    useTrainingParticipants(currentTreinamentoId || undefined);
+  const { data: instrutores = [] } = useInstructors();
+  const { data: responsaveis = [] } = useTechnicalResponsibles();
 
-  const { data: instrutor } = useQuery({
-    queryKey: ["instrutor", treinamento?.instrutor_id],
-    queryFn: () =>
-      base44.entities.Instrutor.filter({ id: treinamento.instrutor_id }).then(
-        (r) => r[0],
-      ),
-    enabled: !!treinamento?.instrutor_id,
-  });
+  const instrutor = useMemo(
+    () => instrutores.find((i) => i.id === treinamento?.instructorId),
+    [instrutores, treinamento?.instructorId],
+  );
 
-  const { data: responsavel } = useQuery({
-    queryKey: ["responsavel", treinamento?.responsavel_tecnico_id],
-    queryFn: () =>
-      base44.entities.ResponsavelTecnico.filter({
-        id: treinamento.responsavel_tecnico_id,
-      }).then((r) => r[0]),
-    enabled: !!treinamento?.responsavel_tecnico_id,
-  });
+  const responsavel = useMemo(
+    () =>
+      responsaveis.find((r) => r.id === treinamento?.technicalResponsibleId),
+    [responsaveis, treinamento?.technicalResponsibleId],
+  );
 
   const participante = participantes.find((p) => p.id === selectedParticipante);
+
+  const getSignatureUrl = (item?: Record<string, unknown> | null) => {
+    if (!item) return "";
+
+    const signature =
+      item.signatureUrl || item.signature_url || item.assinatura_url;
+    return typeof signature === "string" ? signature : "";
+  };
+
+  const isLoadingPreview =
+    Boolean(currentTreinamentoId) &&
+    (loadingTreinamento || loadingParticipantes);
 
   const handlePrint = () => {
     window.print();
@@ -107,7 +100,10 @@ export default function CertificadosPage() {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 no-print">
         <div className="flex items-center gap-4">
-          <Link href={createPageUrl("treinamento")}>
+          <Link
+            href={createPageUrl(`treinamento/turmas/${treinamentoIdParam}`)}
+            passHref
+          >
             <Button variant="ghost" size="icon">
               <ArrowLeft className="w-5 h-5" />
             </Button>
@@ -132,19 +128,20 @@ export default function CertificadosPage() {
                 Treinamento
               </label>
               <Select
-                value={selectedTreinamento}
+                value={currentTreinamentoId}
                 onValueChange={(v) => {
                   setSelectedTreinamento(v);
                   setSelectedParticipante("");
                 }}
+                disabled={loadingTrainings}
               >
                 <SelectTrigger className="mt-1">
                   <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
                 <SelectContent>
                   {treinamentos.map((t) => (
-                    <SelectItem key={t.id} value={t.id}>
-                      {t.titulo}
+                    <SelectItem key={t.id} value={t.id as string}>
+                      {t.title || "Treinamento sem título"}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -156,8 +153,13 @@ export default function CertificadosPage() {
               </label>
               <Select
                 value={selectedParticipante}
-                onValueChange={setSelectedParticipante}
-                disabled={!selectedTreinamento}
+                onValueChange={(value) => {
+                  setSelectedParticipante(value);
+                  if (value === "todos") {
+                    setViewMode("ata");
+                  }
+                }}
+                disabled={!currentTreinamentoId}
               >
                 <SelectTrigger className="mt-1">
                   <SelectValue placeholder="Selecione" />
@@ -165,8 +167,8 @@ export default function CertificadosPage() {
                 <SelectContent>
                   <SelectItem value="todos">Todos (ATA)</SelectItem>
                   {participantes.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.nome}
+                    <SelectItem key={p.id} value={p.id as string}>
+                      {p.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -190,6 +192,7 @@ export default function CertificadosPage() {
               <Button
                 onClick={handlePrint}
                 className="w-full bg-purple-600 hover:bg-purple-700"
+                disabled={!currentTreinamentoId || isLoadingPreview}
               >
                 <Printer className="w-4 h-4 mr-2" />
                 Imprimir
@@ -200,14 +203,20 @@ export default function CertificadosPage() {
       </Card>
 
       {/* Preview */}
-      {selectedTreinamento && treinamento && (
+      {isLoadingPreview && (
+        <Card className="border-0 shadow-md">
+          <CardContent className="flex items-center justify-center py-12 text-slate-500">
+            <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+            Carregando dados do treinamento...
+          </CardContent>
+        </Card>
+      )}
+
+      {currentTreinamentoId && treinamento && !isLoadingPreview && (
         <div className="print-area">
           {viewMode === "certificado" && participante ? (
             // CERTIFICADO
-            <div
-              className="bg-white shadow-lg rounded-lg overflow-hidden"
-              ref={printRef}
-            >
+            <div className="bg-white shadow-lg rounded-lg overflow-hidden">
               {/* Frente do Certificado */}
               <div className="p-8 min-h-[600px] border-8 border-double border-purple-200 m-4 relative">
                 <div className="absolute top-4 right-4">
@@ -227,12 +236,12 @@ export default function CertificadosPage() {
                   </p>
 
                   <h2 className="text-3xl font-bold text-slate-800 border-b-2 border-purple-200 pb-2 inline-block">
-                    {participante.nome}
+                    {participante.name}
                   </h2>
 
-                  {participante.empresa && (
+                  {participante.company && (
                     <p className="text-slate-600">
-                      da empresa <strong>{participante.empresa}</strong>
+                      da empresa <strong>{participante.company}</strong>
                     </p>
                   )}
 
@@ -241,28 +250,27 @@ export default function CertificadosPage() {
                   </p>
 
                   <h3 className="text-2xl font-bold text-purple-700">
-                    {treinamento.titulo}
+                    {treinamento.title}
                   </h3>
 
                   <div className="grid grid-cols-2 gap-4 mt-8 text-left max-w-lg mx-auto">
                     <div className="flex items-center gap-2">
                       <Calendar className="w-5 h-5 text-purple-600" />
                       <span>
-                        <strong>Data:</strong> {treinamento.data_realizacao}
+                        <strong>Data:</strong> {treinamento.eventDate}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Clock className="w-5 h-5 text-purple-600" />
                       <span>
-                        <strong>Carga Horária:</strong>{" "}
-                        {treinamento.carga_horaria}
+                        <strong>Carga Horária:</strong> {treinamento.workload}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 col-span-2">
                       <MapPin className="w-5 h-5 text-purple-600" />
                       <span>
                         <strong>Local:</strong>{" "}
-                        {treinamento.local || "Não especificado"}
+                        {treinamento.location || "Não especificado"}
                       </span>
                     </div>
                   </div>
@@ -270,24 +278,32 @@ export default function CertificadosPage() {
                   <div className="grid grid-cols-2 gap-8 mt-12 pt-8">
                     <div className="text-center">
                       <div className="border-t-2 border-slate-400 pt-2 mt-12">
-                        {participante.assinatura_url ? (
+                        {getSignatureUrl(
+                          participante as Record<string, unknown>,
+                        ) ? (
                           <img
-                            src={participante.assinatura_url}
+                            src={getSignatureUrl(
+                              participante as Record<string, unknown>,
+                            )}
                             alt="Assinatura"
                             className="h-12 mx-auto mb-2"
                           />
                         ) : (
                           <div className="h-12" />
                         )}
-                        <p className="font-medium">{participante.nome}</p>
+                        <p className="font-medium">{participante.name}</p>
                         <p className="text-sm text-slate-500">Participante</p>
                       </div>
                     </div>
                     <div className="text-center">
                       <div className="border-t-2 border-slate-400 pt-2 mt-12">
-                        {instrutor?.assinatura_url ? (
+                        {getSignatureUrl(
+                          instrutor as unknown as Record<string, unknown>,
+                        ) ? (
                           <img
-                            src={instrutor.assinatura_url}
+                            src={getSignatureUrl(
+                              instrutor as unknown as Record<string, unknown>,
+                            )}
                             alt="Assinatura"
                             className="h-12 mx-auto mb-2"
                           />
@@ -295,7 +311,7 @@ export default function CertificadosPage() {
                           <div className="h-12" />
                         )}
                         <p className="font-medium">
-                          {instrutor?.nome || "Instrutor"}
+                          {instrutor?.name || "Instrutor"}
                         </p>
                         <p className="text-sm text-slate-500">Instrutor</p>
                       </div>
@@ -312,7 +328,7 @@ export default function CertificadosPage() {
 
                 <div className="bg-slate-50 p-6 rounded-lg mb-6">
                   <pre className="whitespace-pre-wrap text-sm text-slate-700">
-                    {treinamento.conteudo_programatico}
+                    {treinamento.programContent}
                   </pre>
                 </div>
 
@@ -321,13 +337,13 @@ export default function CertificadosPage() {
                     <h3 className="font-bold text-lg text-purple-800 mb-3">
                       Instrutor
                     </h3>
-                    <p className="font-medium">{instrutor?.nome}</p>
+                    <p className="font-medium">{instrutor?.name}</p>
                     <p className="text-sm text-slate-600">
-                      {instrutor?.qualificacoes}
+                      {instrutor?.qualifications}
                     </p>
-                    {instrutor?.registros_profissionais?.map((reg, i) => (
+                    {instrutor?.professionalRegistrations?.map((reg, i) => (
                       <p key={i} className="text-sm text-slate-500">
-                        {reg.tipo}: {reg.numero}
+                        {reg.type}: {reg.number}
                       </p>
                     ))}
                   </div>
@@ -335,18 +351,22 @@ export default function CertificadosPage() {
                     <h3 className="font-bold text-lg text-purple-800 mb-3">
                       Responsável Técnico
                     </h3>
-                    <p className="font-medium">{responsavel?.nome}</p>
+                    <p className="font-medium">{responsavel?.name}</p>
                     <p className="text-sm text-slate-600">
-                      {responsavel?.qualificacoes}
+                      {responsavel?.qualifications}
                     </p>
-                    {responsavel?.registros_profissionais?.map((reg, i) => (
+                    {responsavel?.professionalRegistrations?.map((reg, i) => (
                       <p key={i} className="text-sm text-slate-500">
-                        {reg.tipo}: {reg.numero}
+                        {reg.type}: {reg.number}
                       </p>
                     ))}
-                    {responsavel?.assinatura_url && (
+                    {getSignatureUrl(
+                      responsavel as unknown as Record<string, unknown>,
+                    ) && (
                       <img
-                        src={responsavel.assinatura_url}
+                        src={getSignatureUrl(
+                          responsavel as unknown as Record<string, unknown>,
+                        )}
                         alt="Assinatura"
                         className="h-12 mt-4"
                       />
@@ -357,10 +377,7 @@ export default function CertificadosPage() {
             </div>
           ) : viewMode === "ata" ? (
             // ATA DE PRESENÇA
-            <div
-              className="bg-white shadow-lg rounded-lg overflow-hidden p-8"
-              ref={printRef}
-            >
+            <div className="bg-white shadow-lg rounded-lg overflow-hidden p-8">
               <div className="text-center mb-8">
                 <h1 className="text-3xl font-bold text-purple-800">
                   ATA DE PRESENÇA
@@ -370,24 +387,24 @@ export default function CertificadosPage() {
 
               <div className="mb-8">
                 <h2 className="text-xl font-bold text-slate-800 mb-4">
-                  {treinamento.titulo}
+                  {treinamento.title}
                 </h2>
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <p>
-                    <strong>Norma:</strong> {treinamento.norma}
+                    <strong>Norma:</strong> {treinamento.standard}
                   </p>
                   <p>
                     <strong>Modalidade:</strong>{" "}
-                    {treinamento.modalidade?.toUpperCase()}
+                    {treinamento.modality?.toUpperCase()}
                   </p>
                   <p>
-                    <strong>Data:</strong> {treinamento.data_realizacao}
+                    <strong>Data:</strong> {treinamento.eventDate}
                   </p>
                   <p>
-                    <strong>Carga Horária:</strong> {treinamento.carga_horaria}
+                    <strong>Carga Horária:</strong> {treinamento.workload}
                   </p>
                   <p className="col-span-2">
-                    <strong>Local:</strong> {treinamento.local}
+                    <strong>Local:</strong> {treinamento.location}
                   </p>
                 </div>
               </div>
@@ -398,7 +415,7 @@ export default function CertificadosPage() {
                 </h3>
                 <div className="bg-slate-50 p-4 rounded-lg text-sm">
                   <pre className="whitespace-pre-wrap">
-                    {treinamento.conteudo_programatico}
+                    {treinamento.programContent}
                   </pre>
                 </div>
               </div>
@@ -421,17 +438,23 @@ export default function CertificadosPage() {
                     {participantes.map((p, i) => (
                       <tr key={p.id}>
                         <td className="border p-2">{i + 1}</td>
-                        <td className="border p-2">{p.nome}</td>
+                        <td className="border p-2">{p.name}</td>
                         <td className="border p-2">{p.cpf}</td>
-                        <td className="border p-2">{p.empresa}</td>
+                        <td className="border p-2">{p.company}</td>
                         <td className="border p-2 h-16">
-                          {p.assinatura_url && (
+                          {getSignatureUrl(p as Record<string, unknown>) ? (
                             <img
-                              src={p.assinatura_url}
+                              src={getSignatureUrl(
+                                p as Record<string, unknown>,
+                              )}
                               alt="Assinatura"
                               className="h-10 mx-auto"
                             />
-                          )}
+                          ) : p.signed ? (
+                            <span className="text-xs text-slate-500">
+                              Assinado
+                            </span>
+                          ) : null}
                         </td>
                       </tr>
                     ))}
@@ -442,38 +465,46 @@ export default function CertificadosPage() {
               <div className="grid grid-cols-2 gap-8 mt-12 pt-8 border-t">
                 <div className="text-center">
                   <div className="border-t-2 border-slate-400 pt-2 mt-16">
-                    {instrutor?.assinatura_url && (
+                    {getSignatureUrl(
+                      instrutor as unknown as Record<string, unknown>,
+                    ) && (
                       <img
-                        src={instrutor.assinatura_url}
+                        src={getSignatureUrl(
+                          instrutor as unknown as Record<string, unknown>,
+                        )}
                         alt="Assinatura"
                         className="h-12 mx-auto mb-2"
                       />
                     )}
-                    <p className="font-medium">{instrutor?.nome}</p>
+                    <p className="font-medium">{instrutor?.name}</p>
                     <p className="text-sm text-slate-500">Instrutor</p>
-                    {instrutor?.registros_profissionais?.map((reg, i) => (
+                    {instrutor?.professionalRegistrations?.map((reg, i) => (
                       <p key={i} className="text-xs text-slate-400">
-                        {reg.tipo}: {reg.numero}
+                        {reg.type}: {reg.number}
                       </p>
                     ))}
                   </div>
                 </div>
                 <div className="text-center">
                   <div className="border-t-2 border-slate-400 pt-2 mt-16">
-                    {responsavel?.assinatura_url && (
+                    {getSignatureUrl(
+                      responsavel as unknown as Record<string, unknown>,
+                    ) && (
                       <img
-                        src={responsavel.assinatura_url}
+                        src={getSignatureUrl(
+                          responsavel as unknown as Record<string, unknown>,
+                        )}
                         alt="Assinatura"
                         className="h-12 mx-auto mb-2"
                       />
                     )}
-                    <p className="font-medium">{responsavel?.nome}</p>
+                    <p className="font-medium">{responsavel?.name}</p>
                     <p className="text-sm text-slate-500">
                       Responsável Técnico
                     </p>
-                    {responsavel?.registros_profissionais?.map((reg, i) => (
+                    {responsavel?.professionalRegistrations?.map((reg, i) => (
                       <p key={i} className="text-xs text-slate-400">
-                        {reg.tipo}: {reg.numero}
+                        {reg.type}: {reg.number}
                       </p>
                     ))}
                   </div>
@@ -493,7 +524,7 @@ export default function CertificadosPage() {
         </div>
       )}
 
-      {!selectedTreinamento && (
+      {!currentTreinamentoId && (
         <Card className="border-dashed no-print">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <FileText className="w-12 h-12 text-slate-300 mb-4" />

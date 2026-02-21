@@ -1,4 +1,4 @@
-export type EnvironmentStatus = "active" | "concluded" | "paused";
+export type EnvironmentStatus = "active" | "concluded" | "paused" | "deleted";
 
 export type Environment = {
   id: string;

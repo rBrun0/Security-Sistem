@@ -67,10 +67,13 @@ export async function createEmployee(data: Omit<Employee, "id">) {
 export async function updateEmployee(id: string, data: Partial<Employee>) {
   const docRef = doc(db, "employees", id);
 
-  return await updateDoc(docRef, {
-    ...data,
-    updated_at: Timestamp.now(),
-  });
+  return await updateDoc(
+    docRef,
+    removeUndefinedFields({
+      ...data,
+      updated_at: Timestamp.now(),
+    }),
+  );
 }
 
 export async function deleteEmployee(id: string) {

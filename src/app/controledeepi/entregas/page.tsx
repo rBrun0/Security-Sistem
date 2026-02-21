@@ -1,8 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import React, { useMemo, useState } from "react";
+import { useFieldArray, useForm, useWatch } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,6 +24,14 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
+import {
   Plus,
   Package,
   Search,
@@ -29,205 +39,213 @@ import {
   User,
   Building2,
   Link as LinkIcon,
-  Copy,
   Trash2,
   CheckCircle,
   Clock,
-  Eye,
 } from "lucide-react";
 import { toast } from "sonner";
-import { createPageUrl } from "@/lib/utils";
-import Link from "next/link";
-import z from "zod";
-import { ca } from "date-fns/locale";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { Form } from "@/components/ui/form";
-import { FormInput, FormSelect } from "@/src/components/form";
+import { useEmployees } from "@/src/app/modules/employees/hooks";
+import { useEnvironments } from "@/src/app/modules/enviroments/hooks";
+import { useEPIs, useUpdateEPI } from "@/src/app/modules/epis/hooks";
+import {
+  useEPIDeliveries,
+  useCreateEPIDelivery,
+} from "@/src/app/modules/epi-deliveries/hooks";
+import { useCreateEPIMovement } from "@/src/app/modules/epi-movements/hooks";
+
+const deliverySchema = z.object({
+  employeeId: z.string().min(1, "Selecione o colaborador."),
+  environmentId: z.string().min(1, "Selecione o ambiente."),
+  deliveryResponsible: z.string().trim().min(1, "Informe o responsável."),
+  items: z
+    .array(
+      z.object({
+        epiId: z.string().min(1, "Selecione o EPI."),
+        quantity: z.coerce.number().min(1, "Quantidade mínima é 1."),
+      }),
+    )
+    .min(1, "Adicione ao menos um EPI."),
+});
+
+type DeliveryFormInput = z.input<typeof deliverySchema>;
+type DeliveryFormOutput = z.output<typeof deliverySchema>;
 
 export default function EntregasEPIPage() {
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterObra, setFilterObra] = useState("todas");
+  const [filterEnvironment, setFilterEnvironment] = useState("todas");
   const [filterStatus, setFilterStatus] = useState("todos");
-  const [selectedTrabalhador, setSelectedTrabalhador] = useState("");
-  const [selectedObra, setSelectedObra] = useState("");
-  const [itensEntrega, setItensEntrega] = useState([
-    { epi_id: "", epi_nome: "", ca: "", quantidade: 1, valor_unitario: 0 },
-  ]);
-  const [responsavelEntrega, setResponsavelEntrega] = useState("");
 
-  const deliverySchema = z.object({
-    employee: z.object({
-      id: z.string(),
-      label: z.string(),
-    }),
-    enviroment: z.object({
-      id: z.string(),
-      label: z.string(),
-    }),
-    deliveryResponsible: z.object({
-      id: z.string(),
-      label: z.string(),
-    }),
-    items: z
-      .object({
-        epi: z.object({
-          id: z.string(),
-          label: z.string(),
-        }),
-        quantity: z.number().min(1, "A quantidade deve ser no mínimo 1"),
-        ca: z.string().optional(),
-      })
-      .array(),
-  });
+  const { data: deliveries = [], isLoading } = useEPIDeliveries();
+  const { data: employees = [] } = useEmployees();
+  const { data: environments = [] } = useEnvironments();
+  const { data: epis = [] } = useEPIs();
 
-  type DeliverySchema = z.infer<typeof deliverySchema>;
+  const createDeliveryMutation = useCreateEPIDelivery();
+  const createMovementMutation = useCreateEPIMovement();
+  const updateEPIMutation = useUpdateEPI();
 
-  const form = useForm<DeliverySchema>({
+  const form = useForm<DeliveryFormInput, unknown, DeliveryFormOutput>({
     resolver: zodResolver(deliverySchema),
     defaultValues: {
-      items: [
-        {
-          epi: {
-            id: "test",
-            label: "Teste",
-          },
-          ca: "12345",
-          quantity: 1,
-        },
-      ],
+      employeeId: "",
+      environmentId: "",
+      deliveryResponsible: "",
+      items: [{ epiId: "", quantity: 1 }],
     },
   });
 
-  const epiItems = form.watch("items");
-
-  const queryClient = useQueryClient();
-
-  const { data: entregas = [], isLoading } = useQuery({
-    queryKey: ["entregas"],
-    queryFn: () => base44.entities.EntregaEPI.list("-created_date"),
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: "items",
   });
 
-  const { data: colaboradores = [] } = useQuery({
-    queryKey: ["colaboradores"],
-    queryFn: () => base44.entities.Colaborador.list(),
-  });
-
-  const { data: ambientes = [] } = useQuery({
-    queryKey: ["ambientes"],
-    queryFn: () => base44.entities.Ambiente.list(),
-  });
-
-  const { data: epis = [] } = useQuery({
-    queryKey: ["epis"],
-    queryFn: () => base44.entities.EPI.list(),
-  });
-
-  const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.EntregaEPI.create(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["entregas"] });
-      setIsOpen(false);
-      resetForm();
-      toast.success("Entrega registrada com sucesso!");
-    },
+  const watchedItems = useWatch({
+    control: form.control,
+    name: "items",
   });
 
   const resetForm = () => {
-    setSelectedTrabalhador("");
-    setSelectedObra("");
-    setItensEntrega([
-      { epi_id: "", epi_nome: "", ca: "", quantidade: 1, valor_unitario: 0 },
-    ]);
-    setResponsavelEntrega("");
+    form.reset({
+      employeeId: "",
+      environmentId: "",
+      deliveryResponsible: "",
+      items: [{ epiId: "", quantity: 1 }],
+    });
   };
 
-  const handleTrabalhadorChange = (value) => {
-    const colaborador = colaboradores.find((c) => c.id === value);
-    setSelectedTrabalhador(value);
-    if (colaborador?.ambiente_id) {
-      setSelectedObra(colaborador.ambiente_id);
+  const generateSignatureToken = (tokenBase: string) =>
+    tokenBase
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80);
+
+  const onSubmit = async (data: DeliveryFormOutput) => {
+    const employee = employees.find((item) => item.id === data.employeeId);
+    const environment = environments.find(
+      (item) => item.id === data.environmentId,
+    );
+
+    if (!employee || !environment) {
+      toast.error("Selecione colaborador e ambiente.");
+      return;
+    }
+
+    const normalizedItems = data.items
+      .map((item) => {
+        const epi = epis.find((entry) => entry.id === item.epiId);
+        if (!epi) return null;
+
+        return {
+          epi,
+          quantity: Number(item.quantity || 0),
+        };
+      })
+      .filter(
+        (item): item is { epi: (typeof epis)[number]; quantity: number } =>
+          Boolean(item),
+      );
+
+    if (normalizedItems.length === 0) {
+      toast.error("Adicione pelo menos um EPI válido.");
+      return;
+    }
+
+    const hasInvalidQuantity = normalizedItems.some(
+      ({ epi, quantity }) => quantity <= 0 || quantity > (epi.quantity || 0),
+    );
+
+    if (hasInvalidQuantity) {
+      toast.error("Quantidade inválida para um ou mais EPIs.");
+      return;
+    }
+
+    const today = new Date().toISOString().split("T")[0];
+    const signatureToken = generateSignatureToken(
+      `${employee.id}-${environment.id}-${today}-${normalizedItems
+        .map(({ epi, quantity }) => `${epi.id}:${quantity}`)
+        .join("_")}`,
+    );
+
+    try {
+      await createDeliveryMutation.mutateAsync({
+        employeeId: employee.id,
+        employeeName: employee.name,
+        employeeCpf: employee.cpf,
+        environmentId: environment.id,
+        environmentName: environment.name,
+        items: normalizedItems.map(({ epi, quantity }) => ({
+          epiId: epi.id,
+          epiName: epi.name,
+          ca: epi.ca,
+          quantity,
+          unitValue: epi.unitValue || 0,
+        })),
+        deliveryDate: today,
+        deliveryResponsible: data.deliveryResponsible,
+        signatureToken,
+        status: "pendente",
+      });
+
+      for (const { epi, quantity } of normalizedItems) {
+        await createMovementMutation.mutateAsync({
+          type: "saida",
+          epiId: epi.id,
+          epiName: epi.name,
+          quantity,
+          unitValue: epi.unitValue || 0,
+          totalValue: (epi.unitValue || 0) * quantity,
+          originWarehouseId: epi.centralWarehouseId,
+          originWarehouseName: epi.centralWarehouseName,
+          destinationEnvironmentId: environment.id,
+          destinationEnvironmentName: environment.name,
+          movementDate: today,
+          observation: `Entrega de EPI para ${employee.name}`,
+        });
+
+        await updateEPIMutation.mutateAsync({
+          id: epi.id,
+          data: {
+            quantity: Math.max(0, (epi.quantity || 0) - quantity),
+          },
+        });
+      }
+
+      toast.success("Entrega registrada com sucesso!");
+      setIsOpen(false);
+      resetForm();
+    } catch {
+      toast.error("Não foi possível registrar a entrega.");
     }
   };
 
-  const handleAddItem = () => {
-    // setItensEntrega([
-    //   ...itensEntrega,
-    //   { epi_id: "", epi_nome: "", ca: "", quantidade: 1, valor_unitario: 0 },
-    // ]);
-    form.setValue("items", [
-      ...form.getValues("items"),
-      { epi: { id: "", label: "" }, ca: "", quantity: 1 },
-    ]);
-  };
-
-  const handleRemoveItem = (index) => {
-    // if (itensEntrega.length > 1) {
-    //   setItensEntrega(itensEntrega.filter((_, i) => i !== index));
-    // }
-
-    form.setValue("items", [
-      ...form.getValues("items").filter((_, i) => i !== index),
-    ]);
-  };
-
-  const handleItemChange = (index, field, value) => {
-    const newItens = [...itensEntrega];
-    if (field === "epi_id") {
-      const epi = epis.find((e) => e.id === value);
-      newItens[index] = {
-        ...newItens[index],
-        epi_id: value,
-        epi_nome: epi?.nome || "",
-        ca: epi?.ca || "",
-        valor_unitario: epi?.valor_unitario || 0,
-      };
-    } else {
-      newItens[index] = { ...newItens[index], [field]: value };
-    }
-    setItensEntrega(newItens);
-  };
-
-  const onSubmit = (e) => {
-    e.preventDefault();
-    const colaborador = colaboradores.find((c) => c.id === selectedTrabalhador);
-    const ambiente = ambientes.find((a) => a.id === selectedObra);
-    const token = Math.random().toString(36).substring(2, 15);
-
-    // createMutation.mutate({
-    //   trabalhador_id: selectedTrabalhador,
-    //   trabalhador_nome: colaborador?.nome || "",
-    //   trabalhador_cpf: colaborador?.cpf || "",
-    //   obra_id: selectedObra,
-    //   obra_nome: ambiente?.nome || "",
-    //   itens: itensEntrega.filter((i) => i.epi_id),
-    //   data_entrega: new Date().toISOString().split("T")[0],
-    //   responsavel_entrega: responsavelEntrega,
-    //   token_assinatura: token,
-    //   status: "pendente",
-    // });
-  };
-
-  const generateSignatureLink = (entrega) => {
+  const generateSignatureLink = (token: string) => {
     const baseUrl = window.location.origin;
-    const path = window.location.pathname.split("/").slice(0, -1).join("/");
-    return `${baseUrl}${path}/Assinatura?token=${entrega.token_assinatura}&tipo=trabalhador`;
+    return `${baseUrl}/controledeepi/entregas/assinatura?token=${token}&tipo=trabalhador`;
   };
 
-  const copyLink = (link) => {
+  const copyLink = (link: string) => {
     navigator.clipboard.writeText(link);
     toast.success("Link copiado!");
   };
 
-  const filteredEntregas = entregas.filter((e) => {
-    const matchSearch = e.trabalhador_nome
-      ?.toLowerCase()
-      .includes(searchTerm.toLowerCase());
-    const matchObra = filterObra === "todas" || e.obra_id === filterObra;
-    const matchStatus = filterStatus === "todos" || e.status === filterStatus;
-    return matchSearch && matchObra && matchStatus;
-  });
+  const filteredDeliveries = useMemo(
+    () =>
+      deliveries.filter((delivery) => {
+        const matchSearch = delivery.employeeName
+          ?.toLowerCase()
+          .includes(searchTerm.toLowerCase());
+        const matchEnvironment =
+          filterEnvironment === "todas" ||
+          delivery.environmentId === filterEnvironment;
+        const matchStatus =
+          filterStatus === "todos" || delivery.status === filterStatus;
+
+        return matchSearch && matchEnvironment && matchStatus;
+      }),
+    [deliveries, filterEnvironment, filterStatus, searchTerm],
+  );
 
   return (
     <div className="space-y-6">
@@ -238,7 +256,13 @@ export default function EntregasEPIPage() {
             Registre e gerencie entregas de EPIs aos trabalhadores
           </p>
         </div>
-        <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <Dialog
+          open={isOpen}
+          onOpenChange={(open) => {
+            setIsOpen(open);
+            if (!open) resetForm();
+          }}
+        >
           <DialogTrigger asChild>
             <Button className="bg-amber-600 hover:bg-amber-700">
               <Plus className="w-4 h-4 mr-2" />
@@ -249,87 +273,95 @@ export default function EntregasEPIPage() {
             <DialogHeader>
               <DialogTitle>Nova Entrega de EPI</DialogTitle>
             </DialogHeader>
+
             <Form {...form}>
               <form
                 onSubmit={form.handleSubmit(onSubmit)}
                 className="space-y-4"
               >
                 <div className="grid grid-cols-2 gap-4">
-                  {/* <div>
-                    <Label>Colaborador *</Label>
-                    <Select
-                      value={selectedTrabalhador}
-                      onValueChange={handleTrabalhadorChange}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {colaboradores
-                          .filter((c) => c.status === "ativo")
-                          .map((c) => (
-                            <SelectItem key={c.id} value={c.id}>
-                              {c.nome} - {c.cpf}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div> */}
-                  <FormSelect
+                  <FormField
                     control={form.control}
-                    name="employee"
-                    options={colaboradores ?? []}
-                    label="Colaborador *"
-                    placeholder="Selecione"
-                    // getOptionLabel={(c) => `${c.nome} - ${c.cpf}`}
-                    // onValueChange={handleTrabalhadorChange}
+                    name="employeeId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Colaborador *</FormLabel>
+                        <Select
+                          value={field.value || undefined}
+                          onValueChange={field.onChange}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecione" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {employees
+                              .filter(
+                                (employee) => employee.status === "active",
+                              )
+                              .map((employee) => (
+                                <SelectItem
+                                  key={employee.id}
+                                  value={employee.id}
+                                >
+                                  {employee.name} - {employee.cpf}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                  {/* <div>
-                    <Label>Ambiente (Obra) *</Label>
-                    <Select
-                      value={selectedObra}
-                      onValueChange={setSelectedObra}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {ambientes
-                          .filter((a) => a.status === "ativo")
-                          .map((a) => (
-                            <SelectItem key={a.id} value={a.id}>
-                              {a.nome}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div> */}
-                  <FormSelect
+
+                  <FormField
                     control={form.control}
-                    name="enviroment"
-                    options={ambientes ?? []}
-                    label="Ambiente (Obra) *"
-                    placeholder="Selecione"
-                    // getOptionLabel={(c) => `${c.nome} - ${c.cpf}`}
-                    // onValueChange={handleTrabalhadorChange}
+                    name="environmentId"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Ambiente (Obra) *</FormLabel>
+                        <Select
+                          value={field.value || undefined}
+                          onValueChange={field.onChange}
+                        >
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecione" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {environments.map((environment) => (
+                              <SelectItem
+                                key={environment.id}
+                                value={environment.id}
+                              >
+                                {environment.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
                 </div>
 
-                {/* <div>
-                  <Label htmlFor="responsavel">Responsável pela Entrega</Label>
-                  <Input
-                    id="responsavel"
-                    value={responsavelEntrega}
-                    onChange={(e) => setResponsavelEntrega(e.target.value)}
-                    placeholder="Nome de quem está entregando"
-                  />
-                </div> */}
-
-                <FormInput
+                <FormField
                   control={form.control}
                   name="deliveryResponsible"
-                  label="Responsável pela Entrega"
-                  placeholder="Nome de quem está entregando"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Responsável pela Entrega</FormLabel>
+                      <FormControl>
+                        <Input
+                          {...field}
+                          placeholder="Nome de quem está entregando"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
 
                 <div className="space-y-3">
@@ -339,126 +371,106 @@ export default function EntregasEPIPage() {
                       type="button"
                       variant="outline"
                       size="sm"
-                      onClick={handleAddItem}
+                      onClick={() => append({ epiId: "", quantity: 1 })}
                     >
                       <Plus className="w-4 h-4 mr-1" />
                       Adicionar EPI
                     </Button>
                   </div>
-                  {/* {itensEntrega.map((item, index) => (
-                  <div
-                    key={index}
-                    className="grid grid-cols-12 gap-2 p-3 bg-slate-50 rounded-lg"
-                    >
-                    <div className="col-span-5">
-                      <Label className="text-xs">EPI</Label>
-                      <Select
-                      value={item.epi_id}
-                      onValueChange={(value) =>
-                      handleItemChange(index, "epi_id", value)
-                        }
+
+                  {fields.map((field, index) => {
+                    const selectedEpiId = watchedItems?.[index]?.epiId;
+                    const selectedEpi = epis.find(
+                      (epi) => epi.id === selectedEpiId,
+                    );
+
+                    return (
+                      <div
+                        key={field.id}
+                        className="grid grid-cols-12 gap-2 p-3 bg-slate-50 rounded-lg"
                       >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                        <SelectContent>
-                        {epis.map((epi) => (
-                          <SelectItem key={epi.id} value={epi.id}>
-                          {epi.nome} {epi.ca && `(CA: ${epi.ca})`}
-                          </SelectItem>
-                          ))}
-                          </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="col-span-3">
-                      <Label className="text-xs">CA</Label>
-                      <Input value={item.ca} disabled className="bg-white" />
-                    </div>
-                    <div className="col-span-2">
-                      <Label className="text-xs">Qtd</Label>
-                      <Input
-                      type="number"
-                        min="1"
-                        value={item.quantidade}
-                        onChange={(e) =>
-                        handleItemChange(
-                          index,
-                            "quantidade",
-                            parseInt(e.target.value) || 1,
-                          )
-                        }
-                      />
-                    </div>
-                    <div className="col-span-2 flex items-end justify-center">
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleRemoveItem(index)}
-                        disabled={itensEntrega.length === 1}
-                      >
-                        <Trash2 className="w-4 h-4 text-red-500" />
-                      </Button>
-                    </div>
-                  </div>
-                ))} */}
-                  {epiItems?.map((item, index) => (
-                    <div
-                      key={index}
-                      className="grid grid-cols-12 gap-2 p-3 bg-slate-50 rounded-lg"
-                    >
-                      <div className="col-span-5">
-                        <Label className="text-xs">EPI</Label>
-                        <Select
-                          value={item.epi_id}
-                          onValueChange={(value) =>
-                            handleItemChange(index, "epi_id", value)
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {epis.map((epi) => (
-                              <SelectItem key={epi.id} value={epi.id}>
-                                {epi.nome} {epi.ca && `(CA: ${epi.ca})`}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <div className="col-span-5">
+                          <FormField
+                            control={form.control}
+                            name={`items.${index}.epiId` as const}
+                            render={({ field: itemField }) => (
+                              <FormItem>
+                                <FormLabel className="text-xs">EPI</FormLabel>
+                                <Select
+                                  value={itemField.value || undefined}
+                                  onValueChange={itemField.onChange}
+                                >
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Selecione" />
+                                    </SelectTrigger>
+                                  </FormControl>
+                                  <SelectContent>
+                                    {epis.map((epi) => (
+                                      <SelectItem key={epi.id} value={epi.id}>
+                                        {epi.name} {epi.ca && `(CA: ${epi.ca})`}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+
+                        <div className="col-span-3">
+                          <Label className="text-xs">CA</Label>
+                          <Input
+                            value={selectedEpi?.ca || ""}
+                            disabled
+                            className="bg-white"
+                          />
+                        </div>
+
+                        <div className="col-span-2">
+                          <FormField
+                            control={form.control}
+                            name={`items.${index}.quantity` as const}
+                            render={({ field: itemField }) => (
+                              <FormItem>
+                                <FormLabel className="text-xs">Qtd</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    type="number"
+                                    min="1"
+                                    max={selectedEpi?.quantity || undefined}
+                                    value={Number(itemField.value ?? 1)}
+                                    onChange={(e) =>
+                                      itemField.onChange(
+                                        Math.max(
+                                          1,
+                                          Number(e.target.value) || 1,
+                                        ),
+                                      )
+                                    }
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+
+                        <div className="col-span-2 flex items-end justify-center">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => remove(index)}
+                            disabled={fields.length === 1}
+                          >
+                            <Trash2 className="w-4 h-4 text-red-500" />
+                          </Button>
+                        </div>
                       </div>
-                      <div className="col-span-3">
-                        <Label className="text-xs">CA</Label>
-                        <Input value={item.ca} disabled className="bg-white" />
-                      </div>
-                      <div className="col-span-2">
-                        <Label className="text-xs">Qtd</Label>
-                        <Input
-                          type="number"
-                          min="1"
-                          value={item.quantidade}
-                          onChange={(e) =>
-                            handleItemChange(
-                              index,
-                              "quantidade",
-                              parseInt(e.target.value) || 1,
-                            )
-                          }
-                        />
-                      </div>
-                      <div className="col-span-2 flex items-end justify-center">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleRemoveItem(index)}
-                          disabled={epiItems.length === 1}
-                        >
-                          <Trash2 className="w-4 h-4 text-red-500" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 <div className="flex justify-end gap-3 pt-4">
@@ -473,9 +485,9 @@ export default function EntregasEPIPage() {
                     type="submit"
                     className="bg-amber-600 hover:bg-amber-700"
                     disabled={
-                      !selectedTrabalhador ||
-                      !selectedObra ||
-                      !itensEntrega.some((i) => i.epi_id)
+                      createDeliveryMutation.isPending ||
+                      createMovementMutation.isPending ||
+                      updateEPIMutation.isPending
                     }
                   >
                     Registrar Entrega
@@ -497,19 +509,21 @@ export default function EntregasEPIPage() {
             className="pl-10 bg-white"
           />
         </div>
-        <Select value={filterObra} onValueChange={setFilterObra}>
+
+        <Select value={filterEnvironment} onValueChange={setFilterEnvironment}>
           <SelectTrigger className="w-48 bg-white">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="todas">Todos Ambientes</SelectItem>
-            {ambientes.map((a) => (
-              <SelectItem key={a.id} value={a.id}>
-                {a.nome}
+            {environments.map((environment) => (
+              <SelectItem key={environment.id} value={environment.id}>
+                {environment.name}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
+
         <Select value={filterStatus} onValueChange={setFilterStatus}>
           <SelectTrigger className="w-48 bg-white">
             <SelectValue />
@@ -524,8 +538,8 @@ export default function EntregasEPIPage() {
 
       {isLoading ? (
         <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
-            <Card key={i} className="animate-pulse">
+          {[1, 2, 3].map((item) => (
+            <Card key={item} className="animate-pulse">
               <CardContent className="p-6">
                 <div className="h-6 bg-slate-200 rounded w-1/2 mb-2" />
                 <div className="h-4 bg-slate-200 rounded w-1/3" />
@@ -533,7 +547,7 @@ export default function EntregasEPIPage() {
             </Card>
           ))}
         </div>
-      ) : filteredEntregas.length === 0 ? (
+      ) : filteredDeliveries.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Package className="w-12 h-12 text-slate-300 mb-4" />
@@ -542,23 +556,13 @@ export default function EntregasEPIPage() {
                 ? "Nenhuma entrega encontrada"
                 : "Nenhuma entrega registrada"}
             </p>
-            {!searchTerm && (
-              <Button
-                variant="outline"
-                className="mt-4"
-                onClick={() => setIsOpen(true)}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Registrar Primeira Entrega
-              </Button>
-            )}
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-4">
-          {filteredEntregas.map((entrega) => (
+          {filteredDeliveries.map((delivery) => (
             <Card
-              key={entrega.id}
+              key={delivery.id}
               className="border-0 shadow-md hover:shadow-lg transition-shadow"
             >
               <CardContent className="p-6">
@@ -566,12 +570,12 @@ export default function EntregasEPIPage() {
                   <div className="flex items-start gap-4">
                     <div
                       className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                        entrega.status === "assinado"
+                        delivery.status === "assinado"
                           ? "bg-green-100"
                           : "bg-amber-100"
                       }`}
                     >
-                      {entrega.status === "assinado" ? (
+                      {delivery.status === "assinado" ? (
                         <CheckCircle className="w-6 h-6 text-green-600" />
                       ) : (
                         <Clock className="w-6 h-6 text-amber-600" />
@@ -580,16 +584,16 @@ export default function EntregasEPIPage() {
                     <div className="space-y-2">
                       <div className="flex items-center gap-2">
                         <h3 className="font-semibold text-lg text-slate-800">
-                          {entrega.trabalhador_nome}
+                          {delivery.employeeName}
                         </h3>
                         <Badge
                           className={
-                            entrega.status === "assinado"
+                            delivery.status === "assinado"
                               ? "bg-green-100 text-green-700"
                               : "bg-amber-100 text-amber-700"
                           }
                         >
-                          {entrega.status === "assinado"
+                          {delivery.status === "assinado"
                             ? "Assinado"
                             : "Pendente"}
                         </Badge>
@@ -597,45 +601,41 @@ export default function EntregasEPIPage() {
                       <div className="flex items-center gap-4 text-sm text-slate-500">
                         <span className="flex items-center gap-1">
                           <User className="w-4 h-4" />
-                          CPF: {entrega.trabalhador_cpf}
+                          CPF: {delivery.employeeCpf}
                         </span>
                         <span className="flex items-center gap-1">
                           <Building2 className="w-4 h-4" />
-                          {entrega.obra_nome}
+                          {delivery.environmentName}
                         </span>
                         <span className="flex items-center gap-1">
                           <Calendar className="w-4 h-4" />
-                          {entrega.data_entrega}
+                          {delivery.deliveryDate}
                         </span>
                       </div>
                       <div className="flex flex-wrap gap-2 mt-2">
-                        {entrega.itens?.map((item, i) => (
-                          <Badge key={i} variant="outline">
-                            {item.epi_nome} x{item.quantidade}
+                        {delivery.items?.map((item, index) => (
+                          <Badge key={index} variant="outline">
+                            {item.epiName} x{item.quantity}
                           </Badge>
                         ))}
                       </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    {entrega.status !== "assinado" && (
+                    {delivery.status !== "assinado" && (
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => copyLink(generateSignatureLink(entrega))}
+                        onClick={() =>
+                          copyLink(
+                            generateSignatureLink(delivery.signatureToken),
+                          )
+                        }
                       >
                         <LinkIcon className="w-4 h-4 mr-1" />
                         Link Assinatura
                       </Button>
                     )}
-                    <Link
-                      href={createPageUrl(`EntregaDetalhe?id=${entrega.id}`)}
-                    >
-                      <Button variant="outline" size="sm">
-                        <Eye className="w-4 h-4 mr-1" />
-                        Detalhes
-                      </Button>
-                    </Link>
                   </div>
                 </div>
               </CardContent>

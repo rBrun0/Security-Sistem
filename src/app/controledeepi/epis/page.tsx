@@ -1,10 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,6 +46,14 @@ import { FormSelect } from "@/src/components/form/form-select";
 import { FormTextarea } from "@/src/components/form/form-textarea";
 import { FormDatePicker } from "@/src/components/form/form-date-picker";
 import { toast } from "sonner";
+import {
+  useCreateEPI,
+  useDeleteEPI,
+  useEPIs,
+  useUpdateEPI,
+} from "@/src/app/modules/epis/hooks";
+import { EPI } from "@/src/app/modules/epis/types";
+import { useCentralWarehouses } from "@/src/app/modules/central-warehouses/hooks";
 
 const CATEGORIAS = [
   { value: "cabeca", label: "Proteção da Cabeça" },
@@ -58,80 +65,58 @@ const CATEGORIAS = [
   { value: "membros_inferiores", label: "Proteção dos Membros Inferiores" },
   { value: "corpo_inteiro", label: "Proteção do Corpo Inteiro" },
   { value: "queda", label: "Proteção Contra Quedas" },
-];
+] as const;
+
+const categoriaColors: Record<string, string> = {
+  cabeca: "bg-blue-100 text-blue-700",
+  olhos_face: "bg-purple-100 text-purple-700",
+  auditivo: "bg-green-100 text-green-700",
+  respiratorio: "bg-teal-100 text-teal-700",
+  tronco: "bg-orange-100 text-orange-700",
+  membros_superiores: "bg-pink-100 text-pink-700",
+  membros_inferiores: "bg-indigo-100 text-indigo-700",
+  corpo_inteiro: "bg-amber-100 text-amber-700",
+  queda: "bg-red-100 text-red-700",
+};
+
+const epiSchema = z.object({
+  name: z.string().min(1, "Nome é obrigatório"),
+  description: z.string().optional(),
+  ca: z.string().optional(),
+  caValidity: z.string().optional(),
+  category: z.string().optional(),
+  centralWarehouseId: z.string().optional(),
+  quantity: z.coerce.number().min(0),
+  unitValue: z.coerce.number().min(0),
+});
+
+type EPIFormInput = z.input<typeof epiSchema>;
+type EPIFormOutput = z.output<typeof epiSchema>;
 
 export default function EPIs() {
   const [isOpen, setIsOpen] = useState(false);
-  const [editingEPI, setEditingEPI] = useState(null);
+  const [editingEPI, setEditingEPI] = useState<EPI | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterCategoria, setFilterCategoria] = useState("todas");
   const [filterEstoque, setFilterEstoque] = useState("todos");
 
-  const epiSchema = z.object({
-    name: z.string().min(1, "Nome é obrigatório"),
-    description: z.string().optional(),
-    ca: z.string().optional(),
-    ca_validity: z.string().optional(),
-    category: z.string().optional(),
-    central_warehouse_id: z.string().optional(),
-    quantity: z.number().min(0).optional(),
-    unit_value: z.number().min(0).optional(),
-  });
+  const { data: epis = [], isLoading } = useEPIs();
+  const { data: estoques = [] } = useCentralWarehouses();
+  const createMutation = useCreateEPI();
+  const updateMutation = useUpdateEPI();
+  const deleteMutation = useDeleteEPI();
 
-  type EPIFormData = z.infer<typeof epiSchema>;
-
-  const form = useForm<EPIFormData>({
+  const form = useForm<EPIFormInput, unknown, EPIFormOutput>({
     resolver: zodResolver(epiSchema),
     defaultValues: {
       name: "",
       description: "",
       ca: "",
-      ca_validity: "",
+      caValidity: "",
       category: "",
-      central_warehouse_id: "",
+      centralWarehouseId: "",
       quantity: 0,
-      unit_value: 0,
-    },
-  });
-
-  const queryClient = useQueryClient();
-
-  const { data: epis = [], isLoading } = useQuery({
-    queryKey: ["epis"],
-    queryFn: () => base44.entities.EPI.list(),
-  });
-
-  const { data: estoques = [] } = useQuery({
-    queryKey: ["estoques"],
-    queryFn: () => base44.entities.EstoqueCentral.list(),
-  });
-
-  const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.EPI.create(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["epis"] });
-      setIsOpen(false);
-      resetForm();
-      toast.success("EPI cadastrado com sucesso!");
-    },
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.EPI.update(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["epis"] });
-      setIsOpen(false);
-      setEditingEPI(null);
-      resetForm();
-      toast.success("EPI atualizado com sucesso!");
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.EPI.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["epis"] });
-      toast.success("EPI excluído com sucesso!");
+      unitValue: 0,
     },
   });
 
@@ -140,72 +125,78 @@ export default function EPIs() {
       name: "",
       description: "",
       ca: "",
-      ca_validity: "",
+      caValidity: "",
       category: "",
-      central_warehouse_id: "",
+      centralWarehouseId: "",
       quantity: 0,
-      unit_value: 0,
+      unitValue: 0,
     });
   };
 
-  const onSubmit = (data: EPIFormData) => {
-    const estoque = estoques.find((e) => e.id === data.central_warehouse_id);
-    const submitData = {
-      nome: data.name,
-      descricao: data.description,
+  const onSubmit = async (data: EPIFormOutput) => {
+    const estoque = estoques.find(
+      (item) => item.id === data.centralWarehouseId,
+    );
+
+    const payload: Omit<EPI, "id"> = {
+      name: data.name,
+      description: data.description,
       ca: data.ca,
-      validade_ca: data.ca_validity,
-      categoria: data.category,
-      estoque_central_id: data.central_warehouse_id,
-      estoque_central_nome: estoque?.nome || "",
-      quantidade: data.quantity || 0,
-      valor_unitario: data.unit_value || 0,
+      caValidity: data.caValidity,
+      category: data.category as EPI["category"],
+      centralWarehouseId: data.centralWarehouseId,
+      centralWarehouseName: estoque?.name,
+      quantity: data.quantity,
+      unitValue: data.unitValue,
     };
 
-    if (editingEPI) {
-      updateMutation.mutate({ id: editingEPI.id, data: submitData });
-    } else {
-      createMutation.mutate(submitData);
+    try {
+      if (editingEPI?.id) {
+        await updateMutation.mutateAsync({ id: editingEPI.id, data: payload });
+        toast.success("EPI atualizado com sucesso!");
+      } else {
+        await createMutation.mutateAsync(payload);
+        toast.success("EPI cadastrado com sucesso!");
+      }
+
+      setIsOpen(false);
+      setEditingEPI(null);
+      resetForm();
+    } catch {
+      toast.error("Não foi possível salvar o EPI.");
     }
   };
 
-  const handleEdit = (epi) => {
+  const handleEdit = (epi: EPI) => {
     setEditingEPI(epi);
     form.reset({
-      name: epi.nome || "",
-      description: epi.descricao || "",
-      ca: epi.ca || "",
-      ca_validity: epi.validade_ca || "",
-      category: epi.categoria || "",
-      central_warehouse_id: epi.estoque_central_id || "",
-      quantity: epi.quantidade || 0,
-      unit_value: epi.valor_unitario || 0,
+      name: epi.name,
+      description: epi.description ?? "",
+      ca: epi.ca ?? "",
+      caValidity: epi.caValidity ?? "",
+      category: epi.category ?? "",
+      centralWarehouseId: epi.centralWarehouseId ?? "",
+      quantity: epi.quantity ?? 0,
+      unitValue: epi.unitValue ?? 0,
     });
     setIsOpen(true);
   };
 
-  const filteredEPIs = epis.filter((epi) => {
-    const matchSearch =
-      epi.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      epi.ca?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchCategoria =
-      filterCategoria === "todas" || epi.categoria === filterCategoria;
-    const matchEstoque =
-      filterEstoque === "todos" || epi.estoque_central_id === filterEstoque;
-    return matchSearch && matchCategoria && matchEstoque;
-  });
-
-  const categoriaColors = {
-    cabeca: "bg-blue-100 text-blue-700",
-    olhos_face: "bg-purple-100 text-purple-700",
-    auditivo: "bg-green-100 text-green-700",
-    respiratorio: "bg-teal-100 text-teal-700",
-    tronco: "bg-orange-100 text-orange-700",
-    membros_superiores: "bg-pink-100 text-pink-700",
-    membros_inferiores: "bg-indigo-100 text-indigo-700",
-    corpo_inteiro: "bg-amber-100 text-amber-700",
-    queda: "bg-red-100 text-red-700",
-  };
+  const filteredEPIs = useMemo(
+    () =>
+      epis.filter((epi) => {
+        const search = searchTerm.toLowerCase();
+        const matchSearch =
+          epi.name.toLowerCase().includes(search) ||
+          epi.ca?.toLowerCase().includes(search);
+        const matchCategoria =
+          filterCategoria === "todas" || epi.category === filterCategoria;
+        const matchEstoque =
+          filterEstoque === "todos" || epi.centralWarehouseId === filterEstoque;
+        return matchSearch && matchCategoria && matchEstoque;
+      }),
+    [epis, filterCategoria, filterEstoque, searchTerm],
+  );
 
   return (
     <div className="space-y-6">
@@ -257,7 +248,7 @@ export default function EPIs() {
                     placeholder="Ex: 12345"
                   />
                   <FormDatePicker
-                    name="ca_validity"
+                    name="caValidity"
                     label="Validade CA"
                     control={form.control}
                   />
@@ -272,14 +263,14 @@ export default function EPIs() {
                   }))}
                 />
                 <FormSelect
-                  name="central_warehouse_id"
+                  name="centralWarehouseId"
                   label="Estoque Central"
                   control={form.control}
                   options={estoques
-                    .filter((e) => e.ativo)
-                    .map((est) => ({
-                      label: est.nome,
-                      value: est.id,
+                    .filter((warehouse) => warehouse.isActive)
+                    .map((warehouse) => ({
+                      label: warehouse.name,
+                      value: warehouse.id,
                     }))}
                 />
                 <div className="grid grid-cols-2 gap-4">
@@ -290,10 +281,9 @@ export default function EPIs() {
                     control={form.control}
                   />
                   <FormInput
-                    name="unit_value"
+                    name="unitValue"
                     label="Valor Unitário (R$)"
                     type="number"
-                    step="0.01"
                     control={form.control}
                   />
                 </div>
@@ -313,6 +303,9 @@ export default function EPIs() {
                   <Button
                     type="submit"
                     className="bg-amber-600 hover:bg-amber-700"
+                    disabled={
+                      createMutation.isPending || updateMutation.isPending
+                    }
                   >
                     {editingEPI ? "Salvar" : "Cadastrar"}
                   </Button>
@@ -352,9 +345,9 @@ export default function EPIs() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="todos">Todos Estoques</SelectItem>
-            {estoques.map((est) => (
-              <SelectItem key={est.id} value={est.id}>
-                {est.nome}
+            {estoques.map((warehouse) => (
+              <SelectItem key={warehouse.id} value={warehouse.id}>
+                {warehouse.name}
               </SelectItem>
             ))}
           </SelectContent>
@@ -363,8 +356,8 @@ export default function EPIs() {
 
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3].map((i) => (
-            <Card key={i} className="animate-pulse">
+          {[1, 2, 3].map((item) => (
+            <Card key={item} className="animate-pulse">
               <CardContent className="p-6">
                 <div className="h-6 bg-slate-200 rounded w-3/4 mb-4" />
                 <div className="h-4 bg-slate-200 rounded w-1/2" />
@@ -405,16 +398,17 @@ export default function EPIs() {
                       <HardHat className="w-6 h-6 text-amber-600" />
                     </div>
                     <div>
-                      <CardTitle className="text-lg">{epi.nome}</CardTitle>
-                      {epi.categoria && (
+                      <CardTitle className="text-lg">{epi.name}</CardTitle>
+                      {epi.category && (
                         <Badge
                           className={
-                            categoriaColors[epi.categoria] ||
+                            categoriaColors[epi.category] ||
                             "bg-slate-100 text-slate-700"
                           }
                         >
-                          {CATEGORIAS.find((c) => c.value === epi.categoria)
-                            ?.label || epi.categoria}
+                          {CATEGORIAS.find(
+                            (item) => item.value === epi.category,
+                          )?.label || epi.category}
                         </Badge>
                       )}
                     </div>
@@ -432,9 +426,13 @@ export default function EPIs() {
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         className="text-red-600"
-                        onClick={() => {
-                          if (confirm("Deseja excluir este EPI?")) {
-                            deleteMutation.mutate(epi.id);
+                        onClick={async () => {
+                          if (!confirm("Deseja excluir este EPI?")) return;
+                          try {
+                            await deleteMutation.mutateAsync(epi.id);
+                            toast.success("EPI excluído com sucesso!");
+                          } catch {
+                            toast.error("Não foi possível excluir o EPI.");
                           }
                         }}
                       >
@@ -452,23 +450,23 @@ export default function EPIs() {
                     <span>CA: {epi.ca}</span>
                   </div>
                 )}
-                {epi.validade_ca && (
+                {epi.caValidity && (
                   <div className="flex items-center gap-2 text-sm text-slate-500">
                     <Calendar className="w-4 h-4" />
-                    <span>Validade: {epi.validade_ca}</span>
+                    <span>Validade: {epi.caValidity}</span>
                   </div>
                 )}
                 <div className="flex items-center gap-2 text-sm text-slate-500">
                   <Package className="w-4 h-4" />
-                  <span>Quantidade: {epi.quantidade || 0}</span>
+                  <span>Quantidade: {epi.quantity || 0}</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-slate-500">
                   <DollarSign className="w-4 h-4" />
-                  <span>Valor: R$ {(epi.valor_unitario || 0).toFixed(2)}</span>
+                  <span>Valor: R$ {(epi.unitValue || 0).toFixed(2)}</span>
                 </div>
-                {epi.estoque_central_nome && (
+                {epi.centralWarehouseName && (
                   <Badge variant="outline" className="mt-2">
-                    {epi.estoque_central_nome}
+                    {epi.centralWarehouseName}
                   </Badge>
                 )}
               </CardContent>

@@ -16,6 +16,7 @@ type FormInputProps<T extends FieldValues> = {
   type?: string;
   className?: string;
   containerClassName?: string;
+  onChange?: (...event: unknown[]) => void;
 };
 
 export function FormInput<T extends FieldValues>({
@@ -26,6 +27,7 @@ export function FormInput<T extends FieldValues>({
   type = "text",
   className,
   containerClassName,
+  onChange,
 }: FormInputProps<T>) {
   return (
     <FormField
@@ -41,6 +43,10 @@ export function FormInput<T extends FieldValues>({
               type={type}
               placeholder={placeholder}
               className={className}
+              onChange={(e) => {
+                field.onChange(e);
+                onChange?.(e.target.value);
+              }}
             />
           </FormControl>
 

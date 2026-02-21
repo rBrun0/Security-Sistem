@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { format } from "date-fns";
+import { format, parse } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CalendarIcon } from "lucide-react";
 import { Control, FieldValues, Path } from "react-hook-form";
@@ -39,43 +39,54 @@ export function FormDatePicker<T extends FieldValues>({
     <FormField
       control={control}
       name={name}
-      render={({ field }) => (
-        <FormItem className="flex flex-col">
-          {label && <FormLabel>{label}</FormLabel>}
+      render={({ field }) => {
+        const parsedDate =
+          typeof field.value === "string"
+            ? parse(field.value, "yyyy-MM-dd", new Date())
+            : field.value;
 
-          <Popover>
-            <PopoverTrigger asChild>
-              <FormControl>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "justify-start text-left font-normal",
-                    !field.value && "text-muted-foreground",
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {field.value
-                    ? format(field.value, "dd/MM/yyyy", {
-                        locale: ptBR,
-                      })
-                    : placeholder}
-                </Button>
-              </FormControl>
-            </PopoverTrigger>
+        return (
+          <FormItem className="flex flex-col">
+            {label && <FormLabel>{label}</FormLabel>}
 
-            <PopoverContent className="w-auto p-0" align="start">
-              <Calendar
-                mode="single"
-                selected={field.value}
-                onSelect={field.onChange}
-                locale={ptBR}
-              />
-            </PopoverContent>
-          </Popover>
+            <Popover>
+              <PopoverTrigger asChild>
+                <FormControl>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "justify-start text-left font-normal",
+                      !field.value && "text-muted-foreground",
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {field.value
+                      ? format(parsedDate, "dd/MM/yyyy", {
+                          locale: ptBR,
+                        })
+                      : placeholder}
+                  </Button>
+                </FormControl>
+              </PopoverTrigger>
 
-          <FormMessage />
-        </FormItem>
-      )}
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={parsedDate}
+                  onSelect={(date) => {
+                    if (!date) return;
+
+                    field.onChange(format(date, "yyyy-MM-dd"));
+                  }}
+                  locale={ptBR}
+                />
+              </PopoverContent>
+            </Popover>
+
+            <FormMessage />
+          </FormItem>
+        );
+      }}
     />
   );
 }

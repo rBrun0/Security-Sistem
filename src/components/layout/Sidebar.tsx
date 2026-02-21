@@ -36,6 +36,7 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
           title: "Ambientes (Obras)",
           href: "cadastros/ambientes",
         },
+        { title: "Empresas", href: "cadastros/empresas" },
         { title: "Colaboradores", href: "cadastros/colaboradores" },
       ],
     },

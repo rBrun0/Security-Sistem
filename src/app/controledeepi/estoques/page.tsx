@@ -1,10 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,72 +37,47 @@ import { Form } from "@/components/ui/form";
 import { FormInput } from "@/src/components/form/form-input";
 import { FormTextarea } from "@/src/components/form/form-textarea";
 import { toast } from "sonner";
+import {
+  useCentralWarehouses,
+  useCreateCentralWarehouse,
+  useDeleteCentralWarehouse,
+  useUpdateCentralWarehouse,
+} from "@/src/app/modules/central-warehouses/hooks";
+import { CentralWarehouse } from "@/src/app/modules/central-warehouses/types";
+import { useEPIs } from "@/src/app/modules/epis/hooks";
+import { Switch } from "@/components/ui/switch";
+import { FormSwitch } from "@/src/components/form/form-switch";
+
+const warehouseSchema = z.object({
+  name: z.string().min(1, "Nome é obrigatório"),
+  description: z.string().optional(),
+  address: z.string().optional(),
+  responsible: z.string().optional(),
+  isActive: z.boolean(),
+});
+
+type WarehouseFormData = z.infer<typeof warehouseSchema>;
 
 export default function Estoques() {
   const [isOpen, setIsOpen] = useState(false);
-  const [editingEstoque, setEditingEstoque] = useState(null);
+  const [editingWarehouse, setEditingWarehouse] =
+    useState<CentralWarehouse | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const estoqueSchema = z.object({
-    name: z.string().min(1, "Nome é obrigatório"),
-    description: z.string().optional(),
-    address: z.string().optional(),
-    responsible: z.string().optional(),
-    active: z.boolean().optional(),
-  });
+  const { data: warehouses = [], isLoading } = useCentralWarehouses();
+  const { data: epis = [] } = useEPIs();
+  const createMutation = useCreateCentralWarehouse();
+  const updateMutation = useUpdateCentralWarehouse();
+  const deleteMutation = useDeleteCentralWarehouse();
 
-  type EstoqueFormData = z.infer<typeof estoqueSchema>;
-
-  const form = useForm<EstoqueFormData>({
-    resolver: zodResolver(estoqueSchema),
+  const form = useForm<WarehouseFormData>({
+    resolver: zodResolver(warehouseSchema),
     defaultValues: {
       name: "",
       description: "",
       address: "",
       responsible: "",
-      active: true,
-    },
-  });
-
-  const queryClient = useQueryClient();
-
-  const { data: estoques = [], isLoading } = useQuery({
-    queryKey: ["estoques"],
-    queryFn: () => base44.entities.EstoqueCentral.list(),
-  });
-
-  const { data: epis = [] } = useQuery({
-    queryKey: ["epis"],
-    queryFn: () => base44.entities.EPI.list(),
-  });
-
-  const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.EstoqueCentral.create(data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["estoques"] });
-      setIsOpen(false);
-      resetForm();
-      toast.success("Estoque cadastrado com sucesso!");
-    },
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }) =>
-      base44.entities.EstoqueCentral.update(id, data),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["estoques"] });
-      setIsOpen(false);
-      setEditingEstoque(null);
-      resetForm();
-      toast.success("Estoque atualizado com sucesso!");
-    },
-  });
-
-  const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.EstoqueCentral.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["estoques"] });
-      toast.success("Estoque excluído com sucesso!");
+      isActive: true,
     },
   });
 
@@ -113,48 +87,63 @@ export default function Estoques() {
       description: "",
       address: "",
       responsible: "",
-      active: true,
+      isActive: true,
     });
   };
 
-  const onSubmit = (data: EstoqueFormData) => {
-    const submitData = {
-      nome: data.name,
-      descricao: data.description,
-      endereco: data.address,
-      responsavel: data.responsible,
-      ativo: data.active !== false,
-    };
+  const onSubmit = async (data: WarehouseFormData) => {
+    const payload: Omit<CentralWarehouse, "id"> = data;
 
-    if (editingEstoque) {
-      updateMutation.mutate({ id: editingEstoque.id, data: submitData });
-    } else {
-      createMutation.mutate(submitData);
+    try {
+      if (editingWarehouse?.id) {
+        await updateMutation.mutateAsync({
+          id: editingWarehouse.id,
+          data: payload,
+        });
+        toast.success("Estoque atualizado com sucesso!");
+      } else {
+        await createMutation.mutateAsync(payload);
+        toast.success("Estoque cadastrado com sucesso!");
+      }
+      setIsOpen(false);
+      setEditingWarehouse(null);
+      resetForm();
+    } catch {
+      toast.error("Não foi possível salvar o estoque.");
     }
   };
 
-  const handleEdit = (estoque) => {
-    setEditingEstoque(estoque);
+  const handleEdit = (warehouse: CentralWarehouse) => {
+    setEditingWarehouse(warehouse);
     form.reset({
-      name: estoque.nome || "",
-      description: estoque.descricao || "",
-      address: estoque.endereco || "",
-      responsible: estoque.responsavel || "",
-      active: estoque.ativo !== false,
+      name: warehouse.name,
+      description: warehouse.description ?? "",
+      address: warehouse.address ?? "",
+      responsible: warehouse.responsible ?? "",
+      isActive: warehouse.isActive,
     });
     setIsOpen(true);
   };
 
-  const getEpisCount = (estoqueId) => {
-    const estoqueEpis = epis.filter((e) => e.estoque_central_id === estoqueId);
+  const getEpisCount = (warehouseId: string) => {
+    const warehouseEpis = epis.filter(
+      (epi) => epi.centralWarehouseId === warehouseId,
+    );
     return {
-      tipos: estoqueEpis.length,
-      quantidade: estoqueEpis.reduce((acc, e) => acc + (e.quantidade || 0), 0),
+      types: warehouseEpis.length,
+      quantity: warehouseEpis.reduce(
+        (acc, epi) => acc + (epi.quantity || 0),
+        0,
+      ),
     };
   };
 
-  const filteredEstoques = estoques.filter((estoque) =>
-    estoque.nome?.toLowerCase().includes(searchTerm.toLowerCase()),
+  const filteredWarehouses = useMemo(
+    () =>
+      warehouses.filter((warehouse) =>
+        warehouse.name.toLowerCase().includes(searchTerm.toLowerCase()),
+      ),
+    [searchTerm, warehouses],
   );
 
   return (
@@ -173,7 +162,7 @@ export default function Estoques() {
           onOpenChange={(open) => {
             setIsOpen(open);
             if (!open) {
-              setEditingEstoque(null);
+              setEditingWarehouse(null);
               resetForm();
             }
           }}
@@ -187,7 +176,7 @@ export default function Estoques() {
           <DialogContent className="max-w-md">
             <DialogHeader>
               <DialogTitle>
-                {editingEstoque ? "Editar Estoque" : "Novo Estoque Central"}
+                {editingWarehouse ? "Editar Estoque" : "Novo Estoque Central"}
               </DialogTitle>
             </DialogHeader>
             <Form {...form}>
@@ -216,6 +205,17 @@ export default function Estoques() {
                   label="Responsável"
                   control={form.control}
                 />
+
+                <div className="flex justify-between items-center rounded-md bg-gray-100 px-4 py-3">
+                  <div className="flex flex-col">
+                    <h1 className="font-semibold">Estoque ativo</h1>
+                    <p className="text-sm">
+                      Estoque disponível para movimentações
+                    </p>
+                  </div>
+                  <FormSwitch control={form.control} name="isActive" />
+                </div>
+
                 <div className="flex justify-end gap-3 pt-4">
                   <Button
                     type="button"
@@ -227,8 +227,11 @@ export default function Estoques() {
                   <Button
                     type="submit"
                     className="bg-amber-600 hover:bg-amber-700"
+                    disabled={
+                      createMutation.isPending || updateMutation.isPending
+                    }
                   >
-                    {editingEstoque ? "Salvar" : "Cadastrar"}
+                    {editingWarehouse ? "Salvar" : "Cadastrar"}
                   </Button>
                 </div>
               </form>
@@ -249,8 +252,8 @@ export default function Estoques() {
 
       {isLoading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3].map((i) => (
-            <Card key={i} className="animate-pulse">
+          {[1, 2, 3].map((item) => (
+            <Card key={item} className="animate-pulse">
               <CardContent className="p-6">
                 <div className="h-6 bg-slate-200 rounded w-3/4 mb-4" />
                 <div className="h-4 bg-slate-200 rounded w-1/2" />
@@ -258,7 +261,7 @@ export default function Estoques() {
             </Card>
           ))}
         </div>
-      ) : filteredEstoques.length === 0 ? (
+      ) : filteredWarehouses.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Warehouse className="w-12 h-12 text-slate-300 mb-4" />
@@ -281,11 +284,12 @@ export default function Estoques() {
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredEstoques.map((estoque) => {
-            const episInfo = getEpisCount(estoque.id);
+          {filteredWarehouses.map((warehouse) => {
+            const epiInfo = getEpisCount(warehouse.id);
+
             return (
               <Card
-                key={estoque.id}
+                key={warehouse.id}
                 className="hover:shadow-lg transition-shadow border-0 shadow-md"
               >
                 <CardHeader className="pb-2">
@@ -293,27 +297,29 @@ export default function Estoques() {
                     <div className="flex items-center gap-3">
                       <div
                         className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                          estoque.ativo ? "bg-amber-100" : "bg-slate-100"
+                          warehouse.isActive ? "bg-amber-100" : "bg-slate-100"
                         }`}
                       >
                         <Warehouse
                           className={`w-6 h-6 ${
-                            estoque.ativo ? "text-amber-600" : "text-slate-400"
+                            warehouse.isActive
+                              ? "text-amber-600"
+                              : "text-slate-400"
                           }`}
                         />
                       </div>
                       <div>
                         <CardTitle className="text-lg">
-                          {estoque.nome}
+                          {warehouse.name}
                         </CardTitle>
                         <Badge
                           className={
-                            estoque.ativo
+                            warehouse.isActive
                               ? "bg-green-100 text-green-700"
                               : "bg-slate-100 text-slate-500"
                           }
                         >
-                          {estoque.ativo ? (
+                          {warehouse.isActive ? (
                             <>
                               <CheckCircle className="w-3 h-3 mr-1" /> Ativo
                             </>
@@ -330,15 +336,22 @@ export default function Estoques() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleEdit(estoque)}>
+                        <DropdownMenuItem onClick={() => handleEdit(warehouse)}>
                           <Edit className="w-4 h-4 mr-2" />
                           Editar
                         </DropdownMenuItem>
                         <DropdownMenuItem
                           className="text-red-600"
-                          onClick={() => {
-                            if (confirm("Deseja excluir este estoque?")) {
-                              deleteMutation.mutate(estoque.id);
+                          onClick={async () => {
+                            if (!confirm("Deseja excluir este estoque?"))
+                              return;
+                            try {
+                              await deleteMutation.mutateAsync(warehouse.id);
+                              toast.success("Estoque excluído com sucesso!");
+                            } catch {
+                              toast.error(
+                                "Não foi possível excluir o estoque.",
+                              );
                             }
                           }}
                         >
@@ -350,23 +363,22 @@ export default function Estoques() {
                   </div>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {estoque.endereco && (
+                  {warehouse.address && (
                     <div className="flex items-start gap-2 text-sm text-slate-500">
                       <MapPin className="w-4 h-4 mt-0.5 shrink-0" />
-                      <span>{estoque.endereco}</span>
+                      <span>{warehouse.address}</span>
                     </div>
                   )}
-                  {estoque.responsavel && (
+                  {warehouse.responsible && (
                     <div className="flex items-center gap-2 text-sm text-slate-500">
                       <User className="w-4 h-4" />
-                      <span>{estoque.responsavel}</span>
+                      <span>{warehouse.responsible}</span>
                     </div>
                   )}
                   <div className="flex items-center gap-2 text-sm text-slate-500">
                     <Package className="w-4 h-4" />
                     <span>
-                      {episInfo.tipos} tipos de EPI • {episInfo.quantidade}{" "}
-                      unidades
+                      {epiInfo.types} tipos de EPI • {epiInfo.quantity} unidades
                     </span>
                   </div>
                 </CardContent>

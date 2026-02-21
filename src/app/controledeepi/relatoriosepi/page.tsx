@@ -1,7 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import React, { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,67 +15,66 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import {
-  FileText,
   Download,
   Calendar,
   Package,
   ArrowRightLeft,
   ArrowDownCircle,
   ArrowUpCircle,
-  DollarSign,
   Filter,
 } from "lucide-react";
 import { format } from "date-fns";
+import { useEPIMovements } from "@/src/app/modules/epi-movements/hooks";
+import { useCentralWarehouses } from "@/src/app/modules/central-warehouses/hooks";
+import { useEPIs } from "@/src/app/modules/epis/hooks";
 
 export default function RelatoriosEPI() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [filterTipo, setFilterTipo] = useState("todos");
-  const [filterEstoque, setFilterEstoque] = useState([]);
+  const [filterType, setFilterType] = useState("todos");
+  const [filterWarehouse, setFilterWarehouse] = useState<string[]>([]);
   const [showFilters, setShowFilters] = useState(false);
 
-  const { data: movimentacoes = [], isLoading } = useQuery({
-    queryKey: ["movimentacoes"],
-    queryFn: () => base44.entities.MovimentacaoEPI.list("-data_movimentacao"),
-  });
+  const { data: movements = [], isLoading } = useEPIMovements();
+  const { data: warehouses = [] } = useCentralWarehouses();
+  const { data: epis = [] } = useEPIs();
 
-  const { data: estoques = [] } = useQuery({
-    queryKey: ["estoques"],
-    queryFn: () => base44.entities.EstoqueCentral.list(),
-  });
-
-  const { data: epis = [] } = useQuery({
-    queryKey: ["epis"],
-    queryFn: () => base44.entities.EPI.list(),
-  });
-
-  const toggleEstoque = (estoqueId) => {
-    setFilterEstoque((prev) =>
-      prev.includes(estoqueId)
-        ? prev.filter((id) => id !== estoqueId)
-        : [...prev, estoqueId],
+  const toggleWarehouse = (warehouseId: string) => {
+    setFilterWarehouse((prev) =>
+      prev.includes(warehouseId)
+        ? prev.filter((id) => id !== warehouseId)
+        : [...prev, warehouseId],
     );
   };
 
-  const filteredMovimentacoes = movimentacoes.filter((mov) => {
-    const matchDateFrom = !dateFrom || mov.data_movimentacao >= dateFrom;
-    const matchDateTo = !dateTo || mov.data_movimentacao <= dateTo;
-    const matchTipo = filterTipo === "todos" || mov.tipo === filterTipo;
-    const matchEstoque =
-      filterEstoque.length === 0 ||
-      filterEstoque.includes(mov.estoque_origem_id) ||
-      filterEstoque.includes(mov.estoque_destino_id);
-    return matchDateFrom && matchDateTo && matchTipo && matchEstoque;
-  });
+  const filteredMovements = useMemo(
+    () =>
+      movements.filter((movement) => {
+        const date = movement.movementDate || "";
+        const matchDateFrom = !dateFrom || date >= dateFrom;
+        const matchDateTo = !dateTo || date <= dateTo;
+        const matchType =
+          filterType === "todos" || movement.type === filterType;
+        const matchWarehouse =
+          filterWarehouse.length === 0 ||
+          filterWarehouse.includes(movement.originWarehouseId || "") ||
+          filterWarehouse.includes(movement.destinationWarehouseId || "");
 
-  const totalEntradas = filteredMovimentacoes
-    .filter((m) => m.tipo === "entrada")
-    .reduce((acc, m) => acc + (m.valor_total || 0), 0);
-  const totalSaidas = filteredMovimentacoes
-    .filter((m) => m.tipo === "saida")
-    .reduce((acc, m) => acc + (m.valor_total || 0), 0);
-  const totalTransferencias = filteredMovimentacoes.filter(
-    (m) => m.tipo === "transferencia",
+        return matchDateFrom && matchDateTo && matchType && matchWarehouse;
+      }),
+    [dateFrom, dateTo, filterType, filterWarehouse, movements],
+  );
+
+  const totalEntries = filteredMovements
+    .filter((movement) => movement.type === "entrada")
+    .reduce((acc, movement) => acc + (movement.totalValue || 0), 0);
+
+  const totalExits = filteredMovements
+    .filter((movement) => movement.type === "saida")
+    .reduce((acc, movement) => acc + (movement.totalValue || 0), 0);
+
+  const totalTransfers = filteredMovements.filter(
+    (movement) => movement.type === "transferencia",
   ).length;
 
   const exportToCSV = () => {
@@ -91,21 +89,25 @@ export default function RelatoriosEPI() {
       "Destino",
       "Observação",
     ];
-    const rows = filteredMovimentacoes.map((m) => [
-      m.data_movimentacao,
-      m.tipo,
-      m.epi_nome,
-      m.quantidade,
-      m.valor_unitario?.toFixed(2) || "0.00",
-      m.valor_total?.toFixed(2) || "0.00",
-      m.estoque_origem_nome || m.obra_destino_nome || "-",
-      m.estoque_destino_nome || "-",
-      m.observacao || "",
+
+    const rows = filteredMovements.map((movement) => [
+      movement.movementDate,
+      movement.type,
+      movement.epiName,
+      movement.quantity,
+      movement.unitValue?.toFixed(2) || "0.00",
+      movement.totalValue?.toFixed(2) || "0.00",
+      movement.originWarehouseName ||
+        movement.destinationEnvironmentName ||
+        "-",
+      movement.destinationWarehouseName || "-",
+      movement.observation || "",
     ]);
 
     const csvContent = [headers, ...rows]
       .map((row) => row.join(","))
       .join("\n");
+
     const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -114,13 +116,13 @@ export default function RelatoriosEPI() {
     link.click();
   };
 
-  const tipoColors = {
+  const typeColors: Record<string, string> = {
     entrada: "bg-green-100 text-green-700",
     saida: "bg-red-100 text-red-700",
     transferencia: "bg-blue-100 text-blue-700",
   };
 
-  const tipoIcons = {
+  const typeIcons = {
     entrada: ArrowDownCircle,
     saida: ArrowUpCircle,
     transferencia: ArrowRightLeft,
@@ -155,7 +157,6 @@ export default function RelatoriosEPI() {
         </div>
       </div>
 
-      {/* Filters */}
       {showFilters && (
         <Card className="border-0 shadow-md">
           <CardContent className="p-6">
@@ -178,7 +179,7 @@ export default function RelatoriosEPI() {
               </div>
               <div>
                 <Label>Tipo</Label>
-                <Select value={filterTipo} onValueChange={setFilterTipo}>
+                <Select value={filterType} onValueChange={setFilterType}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -197,8 +198,8 @@ export default function RelatoriosEPI() {
                   onClick={() => {
                     setDateFrom("");
                     setDateTo("");
-                    setFilterTipo("todos");
-                    setFilterEstoque([]);
+                    setFilterType("todos");
+                    setFilterWarehouse([]);
                   }}
                 >
                   Limpar Filtros
@@ -209,18 +210,18 @@ export default function RelatoriosEPI() {
             <div className="mt-4">
               <Label className="mb-2 block">Estoques</Label>
               <div className="flex flex-wrap gap-3">
-                {estoques.map((estoque) => (
-                  <div key={estoque.id} className="flex items-center gap-2">
+                {warehouses.map((warehouse) => (
+                  <div key={warehouse.id} className="flex items-center gap-2">
                     <Checkbox
-                      id={estoque.id}
-                      checked={filterEstoque.includes(estoque.id)}
-                      onCheckedChange={() => toggleEstoque(estoque.id)}
+                      id={warehouse.id}
+                      checked={filterWarehouse.includes(warehouse.id)}
+                      onCheckedChange={() => toggleWarehouse(warehouse.id)}
                     />
                     <label
-                      htmlFor={estoque.id}
+                      htmlFor={warehouse.id}
                       className="text-sm cursor-pointer"
                     >
-                      {estoque.nome}
+                      {warehouse.name}
                     </label>
                   </div>
                 ))}
@@ -230,7 +231,6 @@ export default function RelatoriosEPI() {
         </Card>
       )}
 
-      {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card className="border-0 shadow-md">
           <CardContent className="p-4">
@@ -241,7 +241,7 @@ export default function RelatoriosEPI() {
               <div>
                 <p className="text-sm text-slate-500">Total Movimentações</p>
                 <p className="text-2xl font-bold text-slate-800">
-                  {filteredMovimentacoes.length}
+                  {filteredMovements.length}
                 </p>
               </div>
             </div>
@@ -256,7 +256,7 @@ export default function RelatoriosEPI() {
               <div>
                 <p className="text-sm text-slate-500">Total Entradas</p>
                 <p className="text-2xl font-bold text-green-600">
-                  R$ {totalEntradas.toFixed(2)}
+                  R$ {totalEntries.toFixed(2)}
                 </p>
               </div>
             </div>
@@ -271,7 +271,7 @@ export default function RelatoriosEPI() {
               <div>
                 <p className="text-sm text-slate-500">Total Saídas</p>
                 <p className="text-2xl font-bold text-red-600">
-                  R$ {totalSaidas.toFixed(2)}
+                  R$ {totalExits.toFixed(2)}
                 </p>
               </div>
             </div>
@@ -286,7 +286,7 @@ export default function RelatoriosEPI() {
               <div>
                 <p className="text-sm text-slate-500">Transferências</p>
                 <p className="text-2xl font-bold text-blue-600">
-                  {totalTransferencias}
+                  {totalTransfers}
                 </p>
               </div>
             </div>
@@ -294,7 +294,6 @@ export default function RelatoriosEPI() {
         </Card>
       </div>
 
-      {/* Table */}
       <Card className="border-0 shadow-md overflow-hidden">
         <CardHeader className="border-b">
           <CardTitle className="text-lg">Movimentações</CardTitle>
@@ -329,56 +328,61 @@ export default function RelatoriosEPI() {
             <tbody>
               {isLoading ? (
                 <tr>
-                  <td colSpan="7" className="text-center p-8 text-slate-500">
+                  <td colSpan={7} className="text-center p-8 text-slate-500">
                     Carregando...
                   </td>
                 </tr>
-              ) : filteredMovimentacoes.length === 0 ? (
+              ) : filteredMovements.length === 0 ? (
                 <tr>
-                  <td colSpan="7" className="text-center p-8 text-slate-500">
+                  <td colSpan={7} className="text-center p-8 text-slate-500">
                     Nenhuma movimentação encontrada
                   </td>
                 </tr>
               ) : (
-                filteredMovimentacoes.map((mov) => {
-                  const TipoIcon = tipoIcons[mov.tipo];
+                filteredMovements.map((movement) => {
+                  const TypeIcon = typeIcons[movement.type];
+
                   return (
-                    <tr key={mov.id} className="border-b hover:bg-slate-50">
+                    <tr
+                      key={movement.id}
+                      className="border-b hover:bg-slate-50"
+                    >
                       <td className="p-4">
                         <div className="flex items-center gap-2">
                           <Calendar className="w-4 h-4 text-slate-400" />
-                          {mov.data_movimentacao}
+                          {movement.movementDate}
                         </div>
                       </td>
                       <td className="p-4">
-                        <Badge className={tipoColors[mov.tipo]}>
-                          <TipoIcon className="w-3 h-3 mr-1" />
-                          {mov.tipo === "entrada"
+                        <Badge className={typeColors[movement.type]}>
+                          <TypeIcon className="w-3 h-3 mr-1" />
+                          {movement.type === "entrada"
                             ? "Entrada"
-                            : mov.tipo === "saida"
+                            : movement.type === "saida"
                               ? "Saída"
                               : "Transferência"}
                         </Badge>
                       </td>
-                      <td className="p-4 font-medium">{mov.epi_nome}</td>
-                      <td className="p-4 text-center">{mov.quantidade}</td>
+                      <td className="p-4 font-medium">{movement.epiName}</td>
+                      <td className="p-4 text-center">{movement.quantity}</td>
                       <td className="p-4 text-right">
-                        R$ {(mov.valor_unitario || 0).toFixed(2)}
+                        R$ {(movement.unitValue || 0).toFixed(2)}
                       </td>
                       <td className="p-4 text-right font-medium">
-                        R$ {(mov.valor_total || 0).toFixed(2)}
+                        R$ {(movement.totalValue || 0).toFixed(2)}
                       </td>
                       <td className="p-4">
-                        {mov.estoque_origem_nome && (
+                        {movement.originWarehouseName && (
                           <span className="text-sm">
-                            De: {mov.estoque_origem_nome}
+                            De: {movement.originWarehouseName}
                           </span>
                         )}
-                        {(mov.estoque_destino_nome ||
-                          mov.obra_destino_nome) && (
+                        {(movement.destinationWarehouseName ||
+                          movement.destinationEnvironmentName) && (
                           <span className="text-sm block">
                             Para:{" "}
-                            {mov.estoque_destino_nome || mov.obra_destino_nome}
+                            {movement.destinationWarehouseName ||
+                              movement.destinationEnvironmentName}
                           </span>
                         )}
                       </td>
@@ -391,36 +395,37 @@ export default function RelatoriosEPI() {
         </div>
       </Card>
 
-      {/* Stock Summary */}
       <Card className="border-0 shadow-md">
         <CardHeader>
           <CardTitle className="text-lg">Resumo por Estoque</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {estoques.map((estoque) => {
-              const estoqueEpis = epis.filter(
-                (e) => e.estoque_central_id === estoque.id,
+            {warehouses.map((warehouse) => {
+              const warehouseEpis = epis.filter(
+                (epi) => epi.centralWarehouseId === warehouse.id,
               );
-              const totalQtd = estoqueEpis.reduce(
-                (acc, e) => acc + (e.quantidade || 0),
+
+              const totalQuantity = warehouseEpis.reduce(
+                (acc, epi) => acc + (epi.quantity || 0),
                 0,
               );
-              const totalValor = estoqueEpis.reduce(
-                (acc, e) => acc + (e.quantidade || 0) * (e.valor_unitario || 0),
+
+              const totalValue = warehouseEpis.reduce(
+                (acc, epi) => acc + (epi.quantity || 0) * (epi.unitValue || 0),
                 0,
               );
 
               return (
-                <div key={estoque.id} className="p-4 bg-slate-50 rounded-lg">
+                <div key={warehouse.id} className="p-4 bg-slate-50 rounded-lg">
                   <h3 className="font-semibold text-slate-800">
-                    {estoque.nome}
+                    {warehouse.name}
                   </h3>
                   <div className="mt-2 space-y-1 text-sm text-slate-600">
-                    <p>Tipos de EPI: {estoqueEpis.length}</p>
-                    <p>Quantidade Total: {totalQtd} unidades</p>
+                    <p>Tipos de EPI: {warehouseEpis.length}</p>
+                    <p>Quantidade Total: {totalQuantity} unidades</p>
                     <p className="font-medium">
-                      Valor Total: R$ {totalValor.toFixed(2)}
+                      Valor Total: R$ {totalValue.toFixed(2)}
                     </p>
                   </div>
                 </div>

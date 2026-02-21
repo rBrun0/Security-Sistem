@@ -1,15 +1,14 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Plus,
   ArrowDownCircle,
@@ -18,7 +17,6 @@ import {
   Search,
   Calendar,
   Package,
-  Building2,
   DollarSign,
 } from "lucide-react";
 import {
@@ -34,161 +32,204 @@ import { FormInput } from "@/src/components/form/form-input";
 import { FormDatePicker } from "@/src/components/form/form-date-picker";
 import { FormTextarea } from "@/src/components/form/form-textarea";
 import { toast } from "sonner";
-import { format } from "date-fns";
+import {
+  useEPIMovements,
+  useCreateEPIMovement,
+} from "@/src/app/modules/epi-movements/hooks";
+import { useEPIs, useUpdateEPI } from "@/src/app/modules/epis/hooks";
+import { useCentralWarehouses } from "@/src/app/modules/central-warehouses/hooks";
+import { useEnvironments } from "@/src/app/modules/enviroments/hooks";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+const movementSchema = z.object({
+  type: z.enum(["entrada", "saida", "transferencia"]),
+  epiId: z.string().min(1, "EPI é obrigatório"),
+  quantity: z.coerce.number().min(1, "Quantidade mínima é 1"),
+  originWarehouseId: z.string().optional(),
+  destinationWarehouseId: z.string().optional(),
+  destinationEnvironmentId: z.string().optional(),
+  movementDate: z.string().optional(),
+  observation: z.string().optional(),
+});
+
+type MovementFormInput = z.input<typeof movementSchema>;
+type MovementFormOutput = z.output<typeof movementSchema>;
 
 export default function Movimentacoes() {
   const [isOpen, setIsOpen] = useState(false);
-  const [tipoMovimentacao, setTipoMovimentacao] = useState("entrada");
+  const [movementType, setMovementType] = useState<
+    "entrada" | "saida" | "transferencia"
+  >("entrada");
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterTipo, setFilterTipo] = useState("todos");
+  const [filterType, setFilterType] = useState("todos");
 
-  const movimentacaoSchema = z.object({
-    type: z.enum(["entrada", "saida", "transferencia"]),
-    epi_id: z.string().min(1, "EPI é obrigatório"),
-    quantity: z.number().min(1, "Quantidade mínima é 1"),
-    origin_warehouse_id: z.string().optional(),
-    destination_warehouse_id: z.string().optional(),
-    destination_environment_id: z.string().optional(),
-    movement_date: z.string().optional(),
-    observation: z.string().optional(),
-  });
-
-  type MovimentacaoFormData = z.infer<typeof movimentacaoSchema>;
-
-  const form = useForm<MovimentacaoFormData>({
-    resolver: zodResolver(movimentacaoSchema),
+  const form = useForm<MovementFormInput, unknown, MovementFormOutput>({
+    resolver: zodResolver(movementSchema),
     defaultValues: {
       type: "entrada",
-      epi_id: "",
+      epiId: "",
       quantity: 1,
-      origin_warehouse_id: "",
-      destination_warehouse_id: "",
-      destination_environment_id: "",
-      movement_date: new Date().toISOString().split("T")[0],
+      originWarehouseId: "",
+      destinationWarehouseId: "",
+      destinationEnvironmentId: "",
+      movementDate: new Date().toISOString().split("T")[0],
       observation: "",
     },
   });
 
-  const queryClient = useQueryClient();
+  const { data: movements = [], isLoading } = useEPIMovements();
+  const { data: epis = [] } = useEPIs();
+  const { data: warehouses = [] } = useCentralWarehouses();
+  const { data: environments = [] } = useEnvironments();
 
-  const { data: movimentacoes = [], isLoading } = useQuery({
-    queryKey: ["movimentacoes"],
-    queryFn: () => base44.entities.MovimentacaoEPI.list("-created_date"),
-  });
-
-  const { data: epis = [] } = useQuery({
-    queryKey: ["epis"],
-    queryFn: () => base44.entities.EPI.list(),
-  });
-
-  const { data: estoques = [] } = useQuery({
-    queryKey: ["estoques"],
-    queryFn: () => base44.entities.EstoqueCentral.list(),
-  });
-
-  const { data: ambientes = [] } = useQuery({
-    queryKey: ["ambientes"],
-    queryFn: () => base44.entities.Ambiente.list(),
-  });
-
-  const createMutation = useMutation({
-    mutationFn: async (data) => {
-      // Create movimentacao
-      const epi = epis.find((e) => e.id === data.epi_id);
-      await base44.entities.MovimentacaoEPI.create({
-        tipo: data.type,
-        epi_id: data.epi_id,
-        epi_nome: epi?.nome,
-        quantidade: data.quantity,
-        valor_unitario: epi?.valor_unitario || 0,
-        estoque_origem_id: data.origin_warehouse_id,
-        estoque_origem_nome: estoques.find(
-          (e) => e.id === data.origin_warehouse_id,
-        )?.nome,
-        estoque_destino_id: data.destination_warehouse_id,
-        estoque_destino_nome: estoques.find(
-          (e) => e.id === data.destination_warehouse_id,
-        )?.nome,
-        obra_destino_id: data.destination_environment_id,
-        obra_destino_nome: ambientes.find(
-          (a) => a.id === data.destination_environment_id,
-        )?.nome,
-        data_movimentacao: data.movement_date,
-        observacao: data.observation,
-        valor_total: (epi?.valor_unitario || 0) * data.quantity,
-      });
-
-      // Update EPI quantity
-      if (epi) {
-        let newQtd = epi.quantidade || 0;
-        if (data.type === "entrada") {
-          newQtd += data.quantity;
-        } else {
-          newQtd -= data.quantity;
-        }
-        await base44.entities.EPI.update(epi.id, {
-          quantidade: Math.max(0, newQtd),
-        });
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["movimentacoes"] });
-      queryClient.invalidateQueries({ queryKey: ["epis"] });
-      setIsOpen(false);
-      resetForm();
-      toast.success("Movimentação registrada com sucesso!");
-    },
-  });
+  const createMovementMutation = useCreateEPIMovement();
+  const updateEPIMutation = useUpdateEPI();
 
   const resetForm = () => {
     form.reset({
       type: "entrada",
-      epi_id: "",
+      epiId: "",
       quantity: 1,
-      origin_warehouse_id: "",
-      destination_warehouse_id: "",
-      destination_environment_id: "",
-      movement_date: new Date().toISOString().split("T")[0],
+      originWarehouseId: "",
+      destinationWarehouseId: "",
+      destinationEnvironmentId: "",
+      movementDate: new Date().toISOString().split("T")[0],
       observation: "",
     });
-    setTipoMovimentacao("entrada");
+    setMovementType("entrada");
   };
 
-  const onSubmit = (data: MovimentacaoFormData) => {
-    createMutation.mutate({
-      ...data,
-      type: tipoMovimentacao as "entrada" | "saida" | "transferencia",
-    });
+  const onSubmit = async (data: MovementFormOutput) => {
+    const epi = epis.find((item) => item.id === data.epiId);
+
+    if (!epi) {
+      toast.error("Selecione um EPI válido.");
+      return;
+    }
+
+    if (movementType === "entrada" && !data.destinationWarehouseId) {
+      toast.error("Selecione o estoque de destino.");
+      return;
+    }
+
+    if (movementType === "saida") {
+      if (!data.originWarehouseId || !data.destinationEnvironmentId) {
+        toast.error("Selecione estoque de origem e ambiente de destino.");
+        return;
+      }
+
+      if (data.quantity > (epi.quantity || 0)) {
+        toast.error("Quantidade indisponível em estoque para saída.");
+        return;
+      }
+    }
+
+    if (movementType === "transferencia") {
+      if (!data.originWarehouseId || !data.destinationWarehouseId) {
+        toast.error("Selecione estoque de origem e destino.");
+        return;
+      }
+
+      if (data.originWarehouseId === data.destinationWarehouseId) {
+        toast.error("Origem e destino não podem ser iguais.");
+        return;
+      }
+    }
+
+    try {
+      const originWarehouse = warehouses.find(
+        (item) => item.id === data.originWarehouseId,
+      );
+      const destinationWarehouse = warehouses.find(
+        (item) => item.id === data.destinationWarehouseId,
+      );
+      const destinationEnvironment = environments.find(
+        (item) => item.id === data.destinationEnvironmentId,
+      );
+
+      await createMovementMutation.mutateAsync({
+        type: movementType,
+        epiId: epi.id,
+        epiName: epi.name,
+        quantity: data.quantity,
+        unitValue: epi.unitValue || 0,
+        totalValue: (epi.unitValue || 0) * data.quantity,
+        originWarehouseId: data.originWarehouseId,
+        originWarehouseName: originWarehouse?.name,
+        destinationWarehouseId: data.destinationWarehouseId,
+        destinationWarehouseName: destinationWarehouse?.name,
+        destinationEnvironmentId: data.destinationEnvironmentId,
+        destinationEnvironmentName: destinationEnvironment?.name,
+        movementDate: data.movementDate,
+        observation: data.observation,
+      });
+
+      if (movementType === "entrada") {
+        await updateEPIMutation.mutateAsync({
+          id: epi.id,
+          data: {
+            quantity: (epi.quantity || 0) + data.quantity,
+            centralWarehouseId: data.destinationWarehouseId,
+            centralWarehouseName: destinationWarehouse?.name,
+          },
+        });
+      }
+
+      if (movementType === "saida") {
+        await updateEPIMutation.mutateAsync({
+          id: epi.id,
+          data: {
+            quantity: Math.max(0, (epi.quantity || 0) - data.quantity),
+          },
+        });
+      }
+
+      if (movementType === "transferencia") {
+        await updateEPIMutation.mutateAsync({
+          id: epi.id,
+          data: {
+            centralWarehouseId: data.destinationWarehouseId,
+            centralWarehouseName: destinationWarehouse?.name,
+          },
+        });
+      }
+
+      toast.success("Movimentação registrada com sucesso!");
+      setIsOpen(false);
+      resetForm();
+    } catch {
+      toast.error("Não foi possível registrar a movimentação.");
+    }
   };
 
-  const filteredMovimentacoes = movimentacoes.filter((mov) => {
-    const matchSearch = mov.epi_nome
+  const filteredMovements = movements.filter((movement) => {
+    const matchSearch = movement.epiName
       ?.toLowerCase()
       .includes(searchTerm.toLowerCase());
-    const matchTipo = filterTipo === "todos" || mov.tipo === filterTipo;
-    return matchSearch && matchTipo;
+    const matchType = filterType === "todos" || movement.type === filterType;
+
+    return matchSearch && matchType;
   });
 
-  const tipoColors = {
+  const typeColors: Record<string, string> = {
     entrada: "bg-green-100 text-green-700",
     saida: "bg-red-100 text-red-700",
     transferencia: "bg-blue-100 text-blue-700",
   };
 
-  const tipoIcons = {
+  const typeIcons = {
     entrada: ArrowDownCircle,
     saida: ArrowUpCircle,
     transferencia: ArrowRightLeft,
   };
-
-  useEffect(() => {
-    form.reset({
-      epi_id: "",
-      quantity: 1,
-      movement_date: new Date().toISOString().split("T")[0],
-      observation: "",
-    });
-  }, [tipoMovimentacao]);
 
   return (
     <div className="space-y-6">
@@ -212,8 +253,15 @@ export default function Movimentacoes() {
             </DialogHeader>
 
             <Tabs
-              value={tipoMovimentacao}
-              onValueChange={setTipoMovimentacao}
+              value={movementType}
+              onValueChange={(value) => {
+                const next = value as "entrada" | "saida" | "transferencia";
+                setMovementType(next);
+                form.setValue("type", next);
+                form.setValue("originWarehouseId", "");
+                form.setValue("destinationWarehouseId", "");
+                form.setValue("destinationEnvironmentId", "");
+              }}
               className="mt-4"
             >
               <TabsList className="grid w-full grid-cols-3">
@@ -246,94 +294,90 @@ export default function Movimentacoes() {
                   className="space-y-4 mt-4"
                 >
                   <FormSelect
-                    name="epi_id"
+                    name="epiId"
                     label="EPI"
                     control={form.control}
                     options={epis.map((epi) => ({
-                      label: `${epi.nome} ${epi.ca ? `(CA: ${epi.ca})` : ""}`,
+                      label: `${epi.name} ${epi.ca ? `(CA: ${epi.ca})` : ""}`,
                       value: epi.id,
                     }))}
                   />
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <FormInput
-                      name="quantity"
-                      label="Quantidade"
-                      type="number"
-                      control={form.control}
-                    />
-                  </div>
+                  <FormInput
+                    name="quantity"
+                    label="Quantidade"
+                    type="number"
+                    control={form.control}
+                  />
 
-                  {tipoMovimentacao === "entrada" && (
+                  {movementType === "entrada" && (
                     <FormSelect
-                      name="destination_warehouse_id"
+                      name="destinationWarehouseId"
                       label="Estoque de Destino"
                       control={form.control}
-                      options={estoques
-                        .filter((e) => e.ativo)
-                        .map((est) => ({
-                          label: est.nome,
-                          value: est.id,
+                      options={warehouses
+                        .filter((warehouse) => warehouse.isActive)
+                        .map((warehouse) => ({
+                          label: warehouse.name,
+                          value: warehouse.id,
                         }))}
                     />
                   )}
 
-                  {tipoMovimentacao === "saida" && (
+                  {movementType === "saida" && (
                     <>
                       <FormSelect
-                        name="origin_warehouse_id"
+                        name="originWarehouseId"
                         label="Estoque de Origem"
                         control={form.control}
-                        options={estoques
-                          .filter((e) => e.ativo)
-                          .map((est) => ({
-                            label: est.nome,
-                            value: est.id,
+                        options={warehouses
+                          .filter((warehouse) => warehouse.isActive)
+                          .map((warehouse) => ({
+                            label: warehouse.name,
+                            value: warehouse.id,
                           }))}
                       />
                       <FormSelect
-                        name="destination_environment_id"
+                        name="destinationEnvironmentId"
                         label="Ambiente de Destino"
                         control={form.control}
-                        options={ambientes
-                          .filter((a) => a.status === "ativo")
-                          .map((ambiente) => ({
-                            label: ambiente.nome,
-                            value: ambiente.id,
-                          }))}
+                        options={environments.map((environment) => ({
+                          label: environment.name,
+                          value: environment.id,
+                        }))}
                       />
                     </>
                   )}
 
-                  {tipoMovimentacao === "transferencia" && (
+                  {movementType === "transferencia" && (
                     <>
                       <FormSelect
-                        name="origin_warehouse_id"
+                        name="originWarehouseId"
                         label="Estoque de Origem"
                         control={form.control}
-                        options={estoques
-                          .filter((e) => e.ativo)
-                          .map((est) => ({
-                            label: est.nome,
-                            value: est.id,
+                        options={warehouses
+                          .filter((warehouse) => warehouse.isActive)
+                          .map((warehouse) => ({
+                            label: warehouse.name,
+                            value: warehouse.id,
                           }))}
                       />
                       <FormSelect
-                        name="destination_warehouse_id"
+                        name="destinationWarehouseId"
                         label="Estoque de Destino"
                         control={form.control}
-                        options={estoques
-                          .filter((e) => e.ativo)
-                          .map((est) => ({
-                            label: est.nome,
-                            value: est.id,
+                        options={warehouses
+                          .filter((warehouse) => warehouse.isActive)
+                          .map((warehouse) => ({
+                            label: warehouse.name,
+                            value: warehouse.id,
                           }))}
                       />
                     </>
                   )}
 
                   <FormDatePicker
-                    name="movement_date"
+                    name="movementDate"
                     label="Data da Movimentação"
                     control={form.control}
                   />
@@ -355,6 +399,10 @@ export default function Movimentacoes() {
                     <Button
                       type="submit"
                       className="bg-amber-600 hover:bg-amber-700"
+                      disabled={
+                        createMovementMutation.isPending ||
+                        updateEPIMutation.isPending
+                      }
                     >
                       Registrar Movimentação
                     </Button>
@@ -376,23 +424,39 @@ export default function Movimentacoes() {
             className="pl-10 bg-white"
           />
         </div>
-        {/* <Select value={filterTipo} onValueChange={setFilterTipo}>
-          <SelectTrigger className="w-48 bg-white">
-            <SelectValue />
+        {/* <select
+          value={filterType}
+          onChange={(e) => setFilterType(e.target.value)}
+          className="h-10 rounded-md border border-input bg-white px-3 text-sm"
+        >
+          <option value="todos">Todos os Tipos</option>
+          <option value="entrada">Entrada</option>
+          <option value="saida">Saída</option>
+          <option value="transferencia">Transferência</option>
+        </select> */}
+        <Select
+          onValueChange={(value) => setFilterType(value)}
+          value={filterType}
+        >
+          <SelectTrigger className="w-full max-w-48">
+            <SelectValue placeholder="Selecione um tipo" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="todos">Todos os Tipos</SelectItem>
-            <SelectItem value="entrada">Entrada</SelectItem>
-            <SelectItem value="saida">Saída</SelectItem>
-            <SelectItem value="transferencia">Transferência</SelectItem>
+            <SelectGroup>
+              <SelectLabel>Tipos de Movimentação</SelectLabel>
+              <SelectItem value="todos">Todos os Tipos</SelectItem>
+              <SelectItem value="entrada">Entrada</SelectItem>
+              <SelectItem value="saida">Saída</SelectItem>
+              <SelectItem value="transferencia">Transferência</SelectItem>
+            </SelectGroup>
           </SelectContent>
-        </Select> */}
+        </Select>
       </div>
 
       {isLoading ? (
         <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
-            <Card key={i} className="animate-pulse">
+          {[1, 2, 3].map((item) => (
+            <Card key={item} className="animate-pulse">
               <CardContent className="p-6">
                 <div className="h-6 bg-slate-200 rounded w-1/2 mb-2" />
                 <div className="h-4 bg-slate-200 rounded w-1/3" />
@@ -400,7 +464,7 @@ export default function Movimentacoes() {
             </Card>
           ))}
         </div>
-      ) : filteredMovimentacoes.length === 0 ? (
+      ) : filteredMovements.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <ArrowRightLeft className="w-12 h-12 text-slate-300 mb-4" />
@@ -409,25 +473,16 @@ export default function Movimentacoes() {
                 ? "Nenhuma movimentação encontrada"
                 : "Nenhuma movimentação registrada"}
             </p>
-            {!searchTerm && (
-              <Button
-                variant="outline"
-                className="mt-4"
-                onClick={() => setIsOpen(true)}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Registrar Primeira Movimentação
-              </Button>
-            )}
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-3">
-          {filteredMovimentacoes.map((mov) => {
-            const TipoIcon = tipoIcons[mov.tipo] || ArrowRightLeft;
+          {filteredMovements.map((movement) => {
+            const TypeIcon = typeIcons[movement.type] || ArrowRightLeft;
+
             return (
               <Card
-                key={mov.id}
+                key={movement.id}
                 className="border-0 shadow-md hover:shadow-lg transition-shadow"
               >
                 <CardContent className="p-4">
@@ -435,18 +490,18 @@ export default function Movimentacoes() {
                     <div className="flex items-center gap-4">
                       <div
                         className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                          mov.tipo === "entrada"
+                          movement.type === "entrada"
                             ? "bg-green-100"
-                            : mov.tipo === "saida"
+                            : movement.type === "saida"
                               ? "bg-red-100"
                               : "bg-blue-100"
                         }`}
                       >
-                        <TipoIcon
+                        <TypeIcon
                           className={`w-6 h-6 ${
-                            mov.tipo === "entrada"
+                            movement.type === "entrada"
                               ? "text-green-600"
-                              : mov.tipo === "saida"
+                              : movement.type === "saida"
                                 ? "text-red-600"
                                 : "text-blue-600"
                           }`}
@@ -455,12 +510,12 @@ export default function Movimentacoes() {
                       <div>
                         <div className="flex items-center gap-2">
                           <h3 className="font-semibold text-slate-800">
-                            {mov.epi_nome}
+                            {movement.epiName}
                           </h3>
-                          <Badge className={tipoColors[mov.tipo]}>
-                            {mov.tipo === "entrada"
+                          <Badge className={typeColors[movement.type]}>
+                            {movement.type === "entrada"
                               ? "Entrada"
-                              : mov.tipo === "saida"
+                              : movement.type === "saida"
                                 ? "Saída"
                                 : "Transferência"}
                           </Badge>
@@ -468,34 +523,34 @@ export default function Movimentacoes() {
                         <div className="flex items-center gap-4 mt-1 text-sm text-slate-500">
                           <span className="flex items-center gap-1">
                             <Calendar className="w-4 h-4" />
-                            {mov.data_movimentacao}
+                            {movement.movementDate}
                           </span>
                           <span className="flex items-center gap-1">
                             <Package className="w-4 h-4" />
-                            {mov.quantidade} un
+                            {movement.quantity} un
                           </span>
-                          {mov.valor_total > 0 && (
+                          {movement.totalValue > 0 && (
                             <span className="flex items-center gap-1">
                               <DollarSign className="w-4 h-4" />
-                              R$ {mov.valor_total?.toFixed(2)}
+                              R$ {movement.totalValue.toFixed(2)}
                             </span>
                           )}
                         </div>
-                        {(mov.estoque_origem_nome ||
-                          mov.estoque_destino_nome ||
-                          mov.obra_destino_nome) && (
+                        {(movement.originWarehouseName ||
+                          movement.destinationWarehouseName ||
+                          movement.destinationEnvironmentName) && (
                           <div className="flex items-center gap-2 mt-2 text-sm">
-                            {mov.estoque_origem_nome && (
+                            {movement.originWarehouseName && (
                               <Badge variant="outline">
-                                De: {mov.estoque_origem_nome}
+                                De: {movement.originWarehouseName}
                               </Badge>
                             )}
-                            {(mov.estoque_destino_nome ||
-                              mov.obra_destino_nome) && (
+                            {(movement.destinationWarehouseName ||
+                              movement.destinationEnvironmentName) && (
                               <Badge variant="outline">
                                 Para:{" "}
-                                {mov.estoque_destino_nome ||
-                                  mov.obra_destino_nome}
+                                {movement.destinationWarehouseName ||
+                                  movement.destinationEnvironmentName}
                               </Badge>
                             )}
                           </div>

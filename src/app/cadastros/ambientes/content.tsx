@@ -3,9 +3,13 @@
 import { useState } from "react";
 import { Envoriments } from "./enviroments";
 import { FormDialog } from "./formDialog";
+import { Environment } from "../../modules/enviroments/types";
 
 export const Content = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const [editingEnvironment, setEditingEnvironment] =
+    useState<Environment | null>(null);
+
   return (
     <>
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -17,9 +21,19 @@ export const Content = () => {
             Gerencie os ambientes de trabalho
           </p>
         </div>
-        <FormDialog isOpen={isOpen} setIsOpen={setIsOpen} />
+        <FormDialog
+          key={editingEnvironment?.id ?? "new"}
+          isOpen={isOpen}
+          setIsOpen={setIsOpen}
+          editingEnvironment={editingEnvironment}
+          setEditingEnviroment={setEditingEnvironment}
+        />
       </div>
-      <Envoriments isOpen={isOpen} setIsOpen={setIsOpen} />
+      <Envoriments
+        isOpen={isOpen}
+        setIsOpen={setIsOpen}
+        setEditingEnvironment={setEditingEnvironment}
+      />
     </>
   );
 };

@@ -1,18 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Dispatch, SetStateAction, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import {
   Plus,
@@ -34,52 +26,50 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { z } from "zod";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
-import {
-  FormInput,
-  FormPhoneInput,
-  FormSelect,
-  FormTextarea,
-} from "@/src/components/form";
-import { Form } from "@/components/ui/form";
-import { FormDatePicker } from "@/src/components/form/form-date-picker";
 import {
   createEnvironment,
+  deleteEnvironment,
   getActiveEnvironments,
   updateEnvironment,
 } from "../../modules/enviroments/service";
 import { useEnvironments } from "../../modules/enviroments/hooks";
 import { getActiveEmployees } from "../../modules/employees/service";
 import { useEmployees } from "../../modules/employees/hooks";
+import { Environment } from "../../modules/enviroments/types";
+import { AlertDialogBuilder } from "@/components/builders/AlertDialogBuilder";
+import { EnvironmentCard } from "@/components/domains/card-enviroment";
 
 export const Envoriments = ({
+  setEditingEnvironment,
   isOpen,
   setIsOpen,
 }: {
+  setEditingEnvironment: Dispatch<SetStateAction<Environment | null>>;
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
 
+  const queryClient = useQueryClient();
+
   const { data: enviroments = [], isLoading } = useEnvironments();
 
   const filteredEnviroments = enviroments.filter(
-    (enviroment) =>
-      enviroment.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      enviroment.client?.toLowerCase().includes(searchTerm.toLowerCase()),
+    (environment) =>
+      environment.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      environment.client?.toLowerCase().includes(searchTerm.toLowerCase()),
   );
 
   const statusColors = {
     active: "bg-green-100 text-green-700",
     concluded: "bg-blue-100 text-blue-700",
     paused: "bg-amber-100 text-amber-700",
+    deleted: "",
   };
 
   const { data: employees = [] } = useEmployees();
 
-  const getEmployeesCount = async (enviromentId: string) => {
+  const getEmployeesCount = (enviromentId: string) => {
     return employees.filter((c) => c.environment_id === enviromentId).length;
   };
 
@@ -130,96 +120,26 @@ export const Envoriments = ({
         </Card>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredEnviroments.map((enviroment) => (
-            <Card
-              key={enviroment.id}
-              className="hover:shadow-lg transition-shadow border-0 shadow-md"
-            >
-              <CardHeader className="pb-2">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                      <Building2 className="w-5 h-5 text-blue-600" />
-                    </div>
-                    <div>
-                      <CardTitle className="text-lg">
-                        {enviroment.name}
-                      </CardTitle>
-                      <Badge className={statusColors[enviroment.status]}>
-                        {enviroment.status === "active"
-                          ? "Ativo"
-                          : enviroment.status === "concluded"
-                            ? "Concluído"
-                            : "Pausado"}
-                      </Badge>
-                    </div>
-                  </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon">
-                        <MoreVertical className="w-4 h-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        // onClick={() => handleEdit(ambiente)}
-                        onClick={() =>
-                          updateEnvironment(enviroment.id, enviroment)
-                        }
-                      >
-                        <Edit className="w-4 h-4 mr-2" />
-                        Editar
-                      </DropdownMenuItem>
-                      <DropdownMenuItem
-                        className="text-red-600"
-                        onClick={() => {
-                          if (confirm("Deseja excluir este ambiente?")) {
-                            // deleteMutation.mutate(ambiente.id);
-                          }
-                        }}
-                      >
-                        <Trash2 className="w-4 h-4 mr-2" />
-                        Excluir
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                {enviroment.address && (
-                  <div className="flex items-start gap-2 text-sm text-slate-500">
-                    <MapPin className="w-4 h-4 mt-0.5 shrink-0" />
-                    <span>
-                      {enviroment.address}
-                      {enviroment.city && `, ${enviroment.city}`}
-                      {enviroment.state && ` - ${enviroment.state}`}
-                    </span>
-                  </div>
-                )}
-                {enviroment.client && (
-                  <div className="flex items-center gap-2 text-sm text-slate-500">
-                    <User className="w-4 h-4" />
-                    <span>{enviroment.client}</span>
-                  </div>
-                )}
-                {enviroment.phoneNumber && (
-                  <div className="flex items-center gap-2 text-sm text-slate-500">
-                    <Phone className="w-4 h-4" />
-                    <span>{enviroment.phoneNumber}</span>
-                  </div>
-                )}
-                <div className="flex items-center gap-2 text-sm text-slate-500">
-                  <Users className="w-4 h-4" />
-                  <span>{getEmployeesCount(enviroment.id)} colaboradores</span>
-                </div>
-                {enviroment.start_date && (
-                  <div className="flex items-center gap-2 text-sm text-slate-500">
-                    <Calendar className="w-4 h-4" />
-                    <span>Início: {enviroment.start_date}</span>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+          {filteredEnviroments.map((environment) => (
+            <EnvironmentCard
+              key={environment.id}
+              environment={environment}
+              statusColors={statusColors}
+              getEmployeesCount={getEmployeesCount}
+              onEdit={(env) => {
+                setEditingEnvironment(env);
+                setIsOpen(true);
+              }}
+              onDelete={async (env) => {
+                await updateEnvironment(env.id, {
+                  status: "deleted",
+                });
+
+                await queryClient.invalidateQueries({
+                  queryKey: ["environments"],
+                });
+              }}
+            />
           ))}
         </div>
       )}

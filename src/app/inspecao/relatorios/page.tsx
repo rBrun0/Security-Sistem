@@ -26,6 +26,8 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useEnvironments } from "../../modules/enviroments/hooks";
+import { useInspections } from "../../modules/inspections/hooks";
 
 export default function RelatoriosInspecaoPage() {
   const [filterObra, setFilterObra] = useState("todas");
@@ -33,37 +35,26 @@ export default function RelatoriosInspecaoPage() {
   const [dateTo, setDateTo] = useState("");
   const [selectedInspecao, setSelectedInspecao] = useState(null);
 
-  const { data: ambientes = [] } = useQuery({
-    queryKey: ["ambientes"],
-    queryFn: () => base44.entities.Ambiente.list(),
-  });
+  const { data: environments = [] } = useEnvironments();
 
-  const { data: inspecoes = [], isLoading } = useQuery({
-    queryKey: ["inspecoes"],
-    queryFn: () =>
-      base44.entities.Inspecao.filter(
-        { status: "concluida" },
-        "-data_inspecao",
-      ),
-  });
+  const { data: inspections = [], isLoading } = useInspections();
 
   const { data: itensInspecao = [] } = useQuery({
     queryKey: ["itens-inspecao-all"],
     queryFn: () => base44.entities.ItemInspecao.list(),
   });
 
-  const filteredInspecoes = inspecoes.filter((inspecao) => {
+  const filteredInspections = inspections.filter((inspection) => {
     const matchObra =
-      filterObra === "todas" ||
-      inspecao.obra_id === filterObra ||
-      inspecao.ambiente_id === filterObra;
-    const matchDateFrom = !dateFrom || inspecao.data_inspecao >= dateFrom;
-    const matchDateTo = !dateTo || inspecao.data_inspecao <= dateTo;
+      filterObra === "todas" || inspection.environment_id === filterObra;
+    // || inspection.ambiente_id === filterObra;
+    const matchDateFrom = !dateFrom || inspection.inspection_date >= dateFrom;
+    const matchDateTo = !dateTo || inspection.inspection_date <= dateTo;
     return matchObra && matchDateFrom && matchDateTo;
   });
 
-  const getItensForInspecao = (inspecaoId) => {
-    return itensInspecao.filter((item) => item.inspecao_id === inspecaoId);
+  const getItensForInspecao = (inspectionId) => {
+    return itensInspecao.filter((item) => item.inspecao_id === inspectionId);
   };
 
   const handlePrint = (inspecao) => {
@@ -82,9 +73,9 @@ export default function RelatoriosInspecaoPage() {
       "Não Conformes",
       "% Conformidade",
     ];
-    const rows = filteredInspecoes.map((i) => [
+    const rows = filteredInspections.map((i) => [
       i.obra_nome,
-      i.data_inspecao,
+      i.inspection_date,
       i.total_itens,
       i.itens_conformes,
       i.itens_nao_conformes,
@@ -149,9 +140,9 @@ export default function RelatoriosInspecaoPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todas">Todos os Ambientes</SelectItem>
-                  {ambientes.map((ambiente) => (
-                    <SelectItem key={ambiente.id} value={ambiente.id}>
-                      {ambiente.nome}
+                  {environments.map((environment) => (
+                    <SelectItem key={environment.id} value={environment.id}>
+                      {environment.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -202,7 +193,7 @@ export default function RelatoriosInspecaoPage() {
             </Card>
           ))}
         </div>
-      ) : filteredInspecoes.length === 0 ? (
+      ) : filteredInspections.length === 0 ? (
         <Card className="border-dashed no-print">
           <CardContent className="flex flex-col items-center justify-center py-12">
             <FileText className="w-12 h-12 text-slate-300 mb-4" />
@@ -213,13 +204,13 @@ export default function RelatoriosInspecaoPage() {
         </Card>
       ) : (
         <div className="space-y-4 no-print">
-          {filteredInspecoes.map((inspecao) => {
-            const itens = getItensForInspecao(inspecao.id);
+          {filteredInspections.map((inspection) => {
+            const itens = getItensForInspecao(inspection.id);
             const naoConformes = itens.filter((i) => !i.conforme);
 
             return (
               <Card
-                key={inspecao.id}
+                key={inspection.id}
                 className="border-0 shadow-md hover:shadow-lg transition-shadow"
               >
                 <CardContent className="p-6">
@@ -230,20 +221,21 @@ export default function RelatoriosInspecaoPage() {
                       </div>
                       <div>
                         <h3 className="font-semibold text-lg text-slate-800">
-                          {inspecao.obra_nome}
+                          {/* {inspecao.obra_nome} */}
+                          {inspection.environment_name}
                         </h3>
                         <div className="flex items-center gap-4 mt-1 text-sm text-slate-500">
                           <span className="flex items-center gap-1">
                             <Calendar className="w-4 h-4" />
-                            {inspecao.data_inspecao}
+                            {inspection.inspection_date}
                           </span>
                           <span className="flex items-center gap-1">
                             <CheckCircle className="w-4 h-4 text-green-500" />
-                            {inspecao.itens_conformes} conformes
+                            {inspection.itens_conformes} conformes
                           </span>
                           <span className="flex items-center gap-1">
                             <AlertTriangle className="w-4 h-4 text-red-500" />
-                            {inspecao.itens_nao_conformes} não conformes
+                            {inspection.itens_nao_conformes} não conformes
                           </span>
                         </div>
                       </div>
@@ -253,20 +245,20 @@ export default function RelatoriosInspecaoPage() {
                         <p className="text-sm text-slate-500">Conformidade</p>
                         <p
                           className={`text-2xl font-bold ${
-                            inspecao.percentual_conformidade >= 80
+                            inspection.percentual_conformidade >= 80
                               ? "text-green-600"
-                              : inspecao.percentual_conformidade >= 50
+                              : inspection.percentual_conformidade >= 50
                                 ? "text-amber-600"
                                 : "text-red-600"
                           }`}
                         >
-                          {inspecao.percentual_conformidade?.toFixed(0)}%
+                          {inspection.percentual_conformidade?.toFixed(0)}%
                         </p>
                       </div>
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handlePrint(inspecao)}
+                        onClick={() => handlePrint(inspection)}
                       >
                         <Printer className="w-4 h-4 mr-2" />
                         Imprimir
