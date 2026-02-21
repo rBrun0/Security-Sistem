@@ -599,6 +599,7 @@ function SidebarMenuBadge({
   );
 }
 
+// TODO Bruno -> It probably will give and error
 const randomNumber = Math.random();
 
 function SidebarMenuSkeleton({
