@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { Suspense, useMemo, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,7 +28,7 @@ import { useTrainingParticipants } from "@/src/app/modules/training-participants
 import { useInstructors } from "@/src/app/modules/instructors/hooks";
 import { useTechnicalResponsibles } from "@/src/app/modules/responsaveistecnicos/hooks";
 
-export default function CertificadosPage() {
+function CertificadosContent() {
   const searchParams = useSearchParams();
   const treinamentoIdParam = searchParams.get("treinamento_id") || "";
   const [selectedTreinamento, setSelectedTreinamento] = useState("");
@@ -535,5 +535,19 @@ export default function CertificadosPage() {
         </Card>
       )}
     </div>
+  );
+}
+
+export default function CertificadosPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="space-y-6">
+          <p className="text-slate-500">Carregando certificados...</p>
+        </div>
+      }
+    >
+      <CertificadosContent />
+    </Suspense>
   );
 }

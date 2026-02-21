@@ -15,21 +15,46 @@ import { removeUndefinedFields } from "@/lib/utils";
 
 const instructorsCollection = collection(db, "instructors");
 
-function normalizeDocData(d): Instructor {
-  const data = d.data ? d.data() : d;
+type FirestoreDocData = {
+  id?: string;
+  data?: () => Record<string, unknown>;
+  [key: string]: unknown;
+};
+
+type RegistrationData = {
+  tipo?: string;
+  type?: string;
+  numero?: string;
+  number?: string;
+  mte?: string;
+};
+
+function normalizeDocData(d: FirestoreDocData): Instructor {
+  const data = (d.data ? d.data() : d) as Record<string, unknown>;
+  const registrationsData = Array.isArray(data.registros_profissionais)
+    ? (data.registros_profissionais as RegistrationData[])
+    : undefined;
 
   return {
     id: d.id,
-    name: data.nome ?? data.name,
-    cpf: data.cpf,
-    phoneNumber: data.phoneNumber,
-    email: data.email,
-    qualifications: data.qualificacoes ?? data.qualifications,
+    name: (data.nome ?? data.name) as string | undefined,
+    cpf: data.cpf as string | undefined,
+    phoneNumber: (data.telefone ?? data.phone ?? data.phoneNumber) as
+      | string
+      | undefined,
+    email: data.email as string | undefined,
+    qualifications: (data.qualificacoes ?? data.qualifications) as
+      | string
+      | undefined,
     professionalRegistrations:
-      data.registros_profissionais?.map((r) => ({
-        type: r.tipo ?? r.type,
-        number: r.numero ?? r.number,
-      })) ?? data.professionalRegistrations,
+      registrationsData?.map((registration) => ({
+        type: registration.tipo ?? registration.type,
+        number: registration.numero ?? registration.number,
+        mte: registration.mte,
+      })) ??
+      (data.professionalRegistrations as
+        | Instructor["professionalRegistrations"]
+        | undefined),
   } as Instructor;
 }
 
@@ -48,7 +73,7 @@ export async function getInstructorById(
 
   if (!snapshot.exists()) return null;
 
-  return normalizeDocData(snapshot);
+  return normalizeDocData(snapshot as unknown as FirestoreDocData);
 }
 
 export async function createInstructor(data: Omit<Instructor, "id">) {

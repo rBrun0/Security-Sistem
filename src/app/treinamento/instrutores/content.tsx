@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Instructors } from "./instructors";
 import { FormDialog } from "./formDialog";
-import { Instrutor } from "../../modules/instrutores/types";
+import { Instrutor } from "../../modules/instructors/types";
 
 export const Content = () => {
   const [isOpen, setIsOpen] = useState(false);

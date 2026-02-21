@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-export default function TurmaDetalhesLegacyRedirectPage() {
+function TurmaDetalhesLegacyRedirectContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -19,4 +19,12 @@ export default function TurmaDetalhesLegacyRedirectPage() {
   }, [router, searchParams]);
 
   return null;
+}
+
+export default function TurmaDetalhesLegacyRedirectPage() {
+  return (
+    <Suspense fallback={null}>
+      <TurmaDetalhesLegacyRedirectContent />
+    </Suspense>
+  );
 }
