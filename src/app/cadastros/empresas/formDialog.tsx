@@ -44,24 +44,36 @@ export const FormDialog = ({
     defaultValues: { status: "active" },
   });
 
+  const mapCompanyToForm = (company: Company): CompanyForm => ({
+    name: company.name,
+    document: company.document,
+    description: company.description,
+    address: company.address,
+    city: company.city,
+    state: company.state,
+    contact_name: company.contact_name,
+    phone: company.phone,
+    status: company.status,
+  });
+
   useEffect(() => {
     if (!isOpen) return;
     if (editingCompany) {
-      form.reset(editingCompany as any);
+      form.reset(mapCompanyToForm(editingCompany));
     } else {
       form.reset();
       setEditingCompany(null);
     }
-  }, [editingCompany, isOpen]);
+  }, [editingCompany, form, isOpen, setEditingCompany]);
 
   const onSubmit = async (data: CompanyForm) => {
     try {
       setIsLoading(true);
       if (editingCompany) {
-        await updateCompany(editingCompany.id, data as any);
+        await updateCompany(editingCompany.id, data);
         toast.success("Empresa atualizada");
       } else {
-        await createCompany(data as any);
+        await createCompany(data);
         toast.success("Empresa criada");
       }
       await queryClient.invalidateQueries({ queryKey: ["companies"] });

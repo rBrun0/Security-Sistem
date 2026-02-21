@@ -23,6 +23,8 @@ import { employeeSchema, EmployeeForm } from "../../modules/employees/schema";
 import {
   createEmployee,
   updateEmployee,
+  CreateEmployeeInput,
+  UpdateEmployeeInput,
 } from "../../modules/employees/service";
 import { useEnvironments } from "../../modules/enviroments/hooks";
 import { useCompanies } from "../../modules/companies/hooks";
@@ -49,26 +51,62 @@ export const FormDialog = ({
     defaultValues: { status: "active" },
   });
 
+  const mapEmployeeToForm = (employee: Employee): EmployeeForm => ({
+    name: employee.name,
+    cpf: employee.cpf,
+    rg: employee.rg,
+    job_title: employee.job_title,
+    role: employee.role,
+    company: employee.company,
+    environment_id: employee.environment_id,
+    phone: employee.phone,
+    email: employee.email,
+    admission_date:
+      typeof employee.admission_date === "string"
+        ? employee.admission_date
+        : new Date(employee.admission_date).toISOString().split("T")[0],
+    status: employee.status,
+  });
+
+  const toEmployeePayload = (data: EmployeeForm): CreateEmployeeInput => ({
+    name: data.name,
+    cpf: data.cpf,
+    status: data.status,
+    rg: data.rg,
+    job_title: data.job_title,
+    role: data.role,
+    company: data.company,
+    environment_id: data.environment_id,
+    phone: data.phone,
+    email: data.email,
+    admission_date: data.admission_date,
+  });
+
   useEffect(() => {
     if (!isOpen) return;
     if (editingColaborador) {
-      form.reset(editingColaborador as any);
+      form.reset(mapEmployeeToForm(editingColaborador));
     } else {
       form.reset({
         status: "active",
       });
       setEditingColaborador(null);
     }
-  }, [editingColaborador, isOpen]);
+  }, [editingColaborador, form, isOpen, setEditingColaborador]);
 
   const onSubmit = async (data: EmployeeForm) => {
     try {
       setIsLoading(true);
+      const payload = toEmployeePayload(data);
+
       if (editingColaborador) {
-        await updateEmployee(editingColaborador.id, data as any);
+        await updateEmployee(
+          editingColaborador.id,
+          payload as UpdateEmployeeInput,
+        );
         toast.success("Colaborador atualizado");
       } else {
-        await createEmployee(data as any);
+        await createEmployee(payload);
         toast.success("Colaborador criado");
       }
       await queryClient.invalidateQueries({ queryKey: ["employees"] });

@@ -25,7 +25,9 @@ import {
 } from "../../modules/inspections/schema";
 import {
   createInspection,
+  CreateInspectionInput,
   updateInspection,
+  UpdateInspectionInput,
 } from "../../modules/inspections/service";
 import { useEnvironments } from "../../modules/enviroments/hooks";
 
@@ -49,10 +51,31 @@ export const FormDialog = ({
     defaultValues: { status: "pending" },
   });
 
+  const mapInspectionToForm = (inspection: Inspection): InspectionForm => ({
+    environment_id: inspection.environment_id,
+    inspection_date: inspection.inspection_date,
+    observations: inspection.observations,
+    status: inspection.status,
+  });
+
+  const toInspectionPayload = (data: InspectionForm): CreateInspectionInput => {
+    const env = environments.find(
+      (environment) => environment.id === data.environment_id,
+    );
+
+    return {
+      environment_id: data.environment_id,
+      inspection_date: data.inspection_date,
+      observations: data.observations,
+      status: data.status,
+      environment_name: env?.name || "",
+    };
+  };
+
   useEffect(() => {
     if (!isOpen) return;
     if (editingInspection) {
-      form.reset(editingInspection as any);
+      form.reset(mapInspectionToForm(editingInspection));
     } else {
       form.reset({
         status: "pending",
@@ -60,22 +83,21 @@ export const FormDialog = ({
       });
       setEditingInspection(null);
     }
-  }, [editingInspection, isOpen]);
+  }, [editingInspection, form, isOpen, setEditingInspection]);
 
   const onSubmit = async (data: InspectionForm) => {
     try {
       setIsLoading(true);
-      const env = environments.find((e) => e.id === data.environment_id);
-      const payload = {
-        ...data,
-        environment_name: env?.name || "",
-      };
+      const payload = toInspectionPayload(data);
 
       if (editingInspection) {
-        await updateInspection(editingInspection.id, payload as any);
+        await updateInspection(
+          editingInspection.id,
+          payload as UpdateInspectionInput,
+        );
         toast.success("Inspeção atualizada");
       } else {
-        await createInspection(payload as any);
+        await createInspection(payload);
         toast.success("Inspeção criada");
       }
       await queryClient.invalidateQueries({ queryKey: ["inspections"] });

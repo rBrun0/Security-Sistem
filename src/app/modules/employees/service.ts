@@ -17,6 +17,22 @@ import { removeUndefinedFields } from "@/lib/utils";
 
 const employeeCollection = collection(db, "employees");
 
+export type CreateEmployeeInput = {
+  name: string;
+  cpf: string;
+  status: Employee["status"];
+  rg?: string;
+  job_title?: string;
+  role?: string;
+  company?: string;
+  environment_id?: string;
+  phone?: string;
+  email?: string;
+  admission_date?: string;
+};
+
+export type UpdateEmployeeInput = Partial<CreateEmployeeInput>;
+
 export async function getEmployees(): Promise<Employee[]> {
   const snapshot = await getDocs(employeeCollection);
 
@@ -51,20 +67,21 @@ export async function getEmployeeById(id: string): Promise<Employee | null> {
   } as Employee;
 }
 
-export async function createEmployee(data: Omit<Employee, "id">) {
+export async function createEmployee(data: CreateEmployeeInput) {
   const now = Timestamp.now();
 
   return await addDoc(
     employeeCollection,
     removeUndefinedFields({
       ...data,
+      admission_date: data.admission_date ?? "",
       created_at: now,
       updated_at: now,
     }),
   );
 }
 
-export async function updateEmployee(id: string, data: Partial<Employee>) {
+export async function updateEmployee(id: string, data: UpdateEmployeeInput) {
   const docRef = doc(db, "employees", id);
 
   return await updateDoc(

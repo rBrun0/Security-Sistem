@@ -29,6 +29,7 @@ export const Content = () => {
           setEditingEnviroment={setEditingEnvironment}
         />
       </div>
+
       <Envoriments
         isOpen={isOpen}
         setIsOpen={setIsOpen}

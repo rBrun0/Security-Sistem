@@ -17,22 +17,46 @@ const technicalResponsiblesCollection = collection(
   "technical_responsibles",
 );
 
-function normalizeDocData(d: any): InstructorType {
-  const data = d.data ? d.data() : d;
+type FirestoreDocData = {
+  id?: string;
+  data?: () => Record<string, unknown>;
+  [key: string]: unknown;
+};
+
+type RegistrationData = {
+  tipo?: string;
+  type?: string;
+  numero?: string;
+  number?: string;
+  mte?: string;
+};
+
+function normalizeDocData(d: FirestoreDocData): InstructorType {
+  const data = (d.data ? d.data() : d) as Record<string, unknown>;
+  const registrationsData = Array.isArray(data.registros_profissionais)
+    ? (data.registros_profissionais as RegistrationData[])
+    : undefined;
 
   return {
     id: d.id,
-    name: data.nome ?? data.name,
-    cpf: data.cpf,
-    phoneNumber: data.telefone ?? data.phone ?? data.phoneNumber,
-    email: data.email,
-    qualifications: data.qualificacoes ?? data.qualifications,
+    name: (data.nome ?? data.name) as string | undefined,
+    cpf: data.cpf as string | undefined,
+    phoneNumber: (data.telefone ?? data.phone ?? data.phoneNumber) as
+      | string
+      | undefined,
+    email: data.email as string | undefined,
+    qualifications: (data.qualificacoes ?? data.qualifications) as
+      | string
+      | undefined,
     professionalRegistrations:
-      data.registros_profissionais?.map((r: any) => ({
-        type: r.tipo ?? r.type,
-        number: r.numero ?? r.number,
-        mte: r.mte,
-      })) ?? data.professionalRegistrations,
+      registrationsData?.map((registration) => ({
+        type: registration.tipo ?? registration.type,
+        number: registration.numero ?? registration.number,
+        mte: registration.mte,
+      })) ??
+      (data.professionalRegistrations as
+        | InstructorType["professionalRegistrations"]
+        | undefined),
   } as InstructorType;
 }
 
@@ -49,7 +73,7 @@ export async function getTechnicalResponsibleById(
   const docRef = doc(db, "technical_responsibles", id);
   const snapshot = await getDoc(docRef);
   if (!snapshot.exists()) return null;
-  return normalizeDocData(snapshot as any);
+  return normalizeDocData(snapshot as unknown as FirestoreDocData);
 }
 
 export async function createTechnicalResponsible(

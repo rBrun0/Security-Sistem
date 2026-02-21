@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createEmployee, getEmployees } from "./service";
+import { createEmployee, CreateEmployeeInput, getEmployees } from "./service";
 
 export function useEmployees() {
   return useQuery({
@@ -12,7 +12,7 @@ export function useCreateEmployee() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: createEmployee,
+    mutationFn: (data: CreateEmployeeInput) => createEmployee(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["employees"] });
     },
