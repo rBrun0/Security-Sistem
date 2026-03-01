@@ -6,17 +6,18 @@ import {
   updateTraining,
 } from "./service";
 import { Training } from "./types";
+import { queryKeys } from "../shared/query-keys";
 
 export function useTrainings() {
   return useQuery({
-    queryKey: ["trainings"],
+    queryKey: queryKeys.trainings,
     queryFn: getTrainings,
   });
 }
 
 export function useTraining(id?: string) {
   return useQuery({
-    queryKey: ["training", id],
+    queryKey: [...queryKeys.training, id],
     queryFn: () => getTrainingById(id as string),
     enabled: Boolean(id),
   });
@@ -27,7 +28,8 @@ export function useCreateTraining() {
 
   return useMutation({
     mutationFn: (data: Omit<Training, "id">) => createTraining(data),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["trainings"] }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.trainings }),
   });
 }
 
@@ -38,8 +40,8 @@ export function useUpdateTraining() {
     mutationFn: ({ id, data }: { id: string; data: Partial<Training> }) =>
       updateTraining(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["trainings"] });
-      queryClient.invalidateQueries({ queryKey: ["training"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.trainings });
+      queryClient.invalidateQueries({ queryKey: queryKeys.training });
     },
   });
 }

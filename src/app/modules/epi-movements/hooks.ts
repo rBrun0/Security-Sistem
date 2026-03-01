@@ -1,10 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createEPIMovement, getEPIMovements } from "./service";
+import {
+  applyEPIMovement,
+  createEPIMovement,
+  getEPIMovements,
+} from "./service";
 import { EPIMovement } from "./types";
+import { queryKeys } from "../shared/query-keys";
 
 export function useEPIMovements() {
   return useQuery({
-    queryKey: ["epi-movements"],
+    queryKey: queryKeys.epiMovements,
     queryFn: getEPIMovements,
   });
 }
@@ -15,7 +20,20 @@ export function useCreateEPIMovement() {
   return useMutation({
     mutationFn: (data: Omit<EPIMovement, "id">) => createEPIMovement(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["epi-movements"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.epiMovements });
+    },
+  });
+}
+
+export function useApplyEPIMovement() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (data: Omit<EPIMovement, "id">) => applyEPIMovement(data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.epiMovements });
+      queryClient.invalidateQueries({ queryKey: queryKeys.epis });
+      queryClient.invalidateQueries({ queryKey: queryKeys.epi });
     },
   });
 }

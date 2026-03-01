@@ -24,14 +24,14 @@ export function FormTextarea<T extends FieldValues>({
       control={control}
       name={name}
       render={({ field }) => (
-        <FormItem>
+        <FormItem className="relative">
           {label && <FormLabel>{label}</FormLabel>}
 
           <FormControl>
             <Textarea {...field} placeholder={placeholder} />
           </FormControl>
 
-          <FormMessage />
+          <FormMessage className="absolute right-0 top-full mt-1 text-xs" />
         </FormItem>
       )}
     />

@@ -16,6 +16,7 @@ export type EPI = {
   ca?: string;
   caValidity?: string;
   category?: EPICategory;
+  isActive?: boolean;
   centralWarehouseId?: string;
   centralWarehouseName?: string;
   quantity: number;

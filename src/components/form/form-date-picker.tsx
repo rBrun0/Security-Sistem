@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { format, parse } from "date-fns";
+import { format, isValid, parse } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CalendarIcon } from "lucide-react";
 import { Control, FieldValues, Path } from "react-hook-form";
@@ -29,6 +29,25 @@ type FormDatePickerProps<T extends FieldValues> = {
   placeholder?: string;
 };
 
+function parseDateValue(value: unknown): Date | undefined {
+  if (value instanceof Date) {
+    return isValid(value) ? value : undefined;
+  }
+
+  if (typeof value !== "string") return undefined;
+
+  const normalized = value.trim();
+  if (!normalized) return undefined;
+
+  const parsedIso = parse(normalized, "yyyy-MM-dd", new Date());
+  if (isValid(parsedIso)) return parsedIso;
+
+  const parsedPtBr = parse(normalized, "dd/MM/yyyy", new Date());
+  if (isValid(parsedPtBr)) return parsedPtBr;
+
+  return undefined;
+}
+
 export function FormDatePicker<T extends FieldValues>({
   name,
   control,
@@ -40,13 +59,10 @@ export function FormDatePicker<T extends FieldValues>({
       control={control}
       name={name}
       render={({ field }) => {
-        const parsedDate =
-          typeof field.value === "string"
-            ? parse(field.value, "yyyy-MM-dd", new Date())
-            : field.value;
+        const parsedDate = parseDateValue(field.value);
 
         return (
-          <FormItem className="flex flex-col">
+          <FormItem className="relative flex flex-col">
             {label && <FormLabel>{label}</FormLabel>}
 
             <Popover>
@@ -56,11 +72,11 @@ export function FormDatePicker<T extends FieldValues>({
                     variant="outline"
                     className={cn(
                       "justify-start text-left font-normal",
-                      !field.value && "text-muted-foreground",
+                      !parsedDate && "text-muted-foreground",
                     )}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {field.value
+                    {parsedDate
                       ? format(parsedDate, "dd/MM/yyyy", {
                           locale: ptBR,
                         })
@@ -83,7 +99,7 @@ export function FormDatePicker<T extends FieldValues>({
               </PopoverContent>
             </Popover>
 
-            <FormMessage />
+            <FormMessage className="absolute right-0 top-full mt-1 text-xs" />
           </FormItem>
         );
       }}

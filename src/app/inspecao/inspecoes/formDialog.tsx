@@ -30,6 +30,8 @@ import {
   UpdateInspectionInput,
 } from "../../modules/inspections/service";
 import { useEnvironments } from "../../modules/enviroments/hooks";
+import { todayLocalISODate } from "@/src/lib/date";
+import { queryKeys } from "../../modules/shared/query-keys";
 
 export const FormDialog = ({
   isOpen,
@@ -79,7 +81,7 @@ export const FormDialog = ({
     } else {
       form.reset({
         status: "pending",
-        inspection_date: new Date().toISOString().split("T")[0],
+        inspection_date: todayLocalISODate(),
       });
       setEditingInspection(null);
     }
@@ -100,7 +102,7 @@ export const FormDialog = ({
         await createInspection(payload);
         toast.success("Inspeção criada");
       }
-      await queryClient.invalidateQueries({ queryKey: ["inspections"] });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.inspections });
     } catch (err) {
       toast.error("Erro ao salvar inspeção");
     } finally {
@@ -128,7 +130,7 @@ export const FormDialog = ({
             setEditingInspection(null);
             form.reset({
               status: "pending",
-              inspection_date: new Date().toISOString().split("T")[0],
+              inspection_date: todayLocalISODate(),
             });
           }}
         >
@@ -137,13 +139,13 @@ export const FormDialog = ({
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[90vh] max-w-lg flex-col p-0">
+        <DialogHeader className="border-b p-6">
           <DialogTitle>
             {editingInspection ? "Editar Inspeção" : "Nova Inspeção"}
           </DialogTitle>
         </DialogHeader>
-        <div>
+        <div className="flex-1 overflow-y-auto p-3">
           <Form {...form}>
             <form
               onSubmit={form.handleSubmit(onSubmit)}
@@ -164,6 +166,16 @@ export const FormDialog = ({
                 label="Data da Inspeção"
                 control={form.control}
               />
+              <FormSelect
+                name="status"
+                label="Status"
+                control={form.control}
+                options={[
+                  { label: "Pendente", value: "pending" },
+                  { label: "Concluída", value: "completed" },
+                  { label: "Aprovada", value: "approved" },
+                ]}
+              />
               <FormTextarea
                 name="observations"
                 label="Observações"
@@ -178,12 +190,13 @@ export const FormDialog = ({
               type="button"
               variant="outline"
               onClick={() => setIsOpen(false)}
+              className="cursor-pointer"
             >
               Cancelar
             </Button>
             <Button
               type="submit"
-              className="bg-emerald-600 hover:bg-emerald-700"
+              className="bg-emerald-600 hover:bg-emerald-700 cursor-pointer"
               form="inspection-form"
               disabled={isLoading}
             >

@@ -6,10 +6,11 @@ import {
   updateTechnicalResponsible,
 } from "./service";
 import { Instructor } from "../instructors/types";
+import { queryKeys } from "../shared/query-keys";
 
 export function useTechnicalResponsibles() {
   return useQuery({
-    queryKey: ["technical_responsibles"],
+    queryKey: queryKeys.technicalResponsibles,
     queryFn: getTechnicalResponsibles,
   });
 }
@@ -21,7 +22,9 @@ export function useCreateTechnicalResponsible() {
     mutationFn: (data: Omit<Instructor, "id">) =>
       createTechnicalResponsible(data),
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["technical_responsibles"] }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.technicalResponsibles,
+      }),
   });
 }
 
@@ -32,7 +35,9 @@ export function useUpdateTechnicalResponsible() {
     mutationFn: ({ id, data }: { id: string; data: Partial<Instructor> }) =>
       updateTechnicalResponsible(id, data),
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["technical_responsibles"] }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.technicalResponsibles,
+      }),
   });
 }
 
@@ -42,6 +47,8 @@ export function useDeleteTechnicalResponsible() {
   return useMutation({
     mutationFn: (id: string) => deleteTechnicalResponsible(id),
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["technical_responsibles"] }),
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.technicalResponsibles,
+      }),
   });
 }

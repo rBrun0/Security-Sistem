@@ -2,15 +2,14 @@
 
 import { Dispatch, SetStateAction, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Plus, Edit, Trash2 } from "lucide-react";
+import { Search, Plus, Building2 } from "lucide-react";
 import { toast } from "sonner";
 import { useCompanies } from "../../modules/companies/hooks";
 import { Company } from "../../modules/companies/types";
 import { updateCompany } from "../../modules/companies/service";
 import { CompanyCard } from "@/components/domains/card-company";
+import { EmptyStateCard, LoadingCardGrid } from "@/src/components/common";
 
 export const Companies = ({
   setEditingCompany,
@@ -47,15 +46,19 @@ export const Companies = ({
       <div className="mb-4" />
 
       {isLoading ? (
-        <div>Carregando...</div>
+        <LoadingCardGrid lineWidths={["w-3/4", "w-1/2", "w-2/3"]} />
       ) : filtered.length === 0 ? (
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <p className="text-slate-500 text-center">
-              Nenhuma empresa encontrada
-            </p>
-          </CardContent>
-        </Card>
+        <EmptyStateCard
+          icon={Building2}
+          message={
+            searchTerm
+              ? "Nenhuma empresa encontrada"
+              : "Nenhuma empresa cadastrada"
+          }
+          actionLabel={!searchTerm ? "Cadastrar Primeira Empresa" : undefined}
+          actionIcon={!searchTerm ? Plus : undefined}
+          onAction={!searchTerm ? () => setIsOpen(true) : undefined}
+        />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filtered.map((company) => (

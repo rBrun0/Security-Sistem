@@ -31,19 +31,25 @@ export function FormPhoneInput<T extends FieldValues>({
       name={name}
       control={control}
       render={({ field }) => (
-        <FormItem className={containerClassName}>
+        <FormItem className={`relative ${containerClassName ?? ""}`}>
           {label && <FormLabel>{label}</FormLabel>}
 
           <PhoneInput
-            {...field}
+            value={(field.value as string | undefined) || undefined}
+            onChange={(value) => field.onChange(value ?? "")}
+            onBlur={field.onBlur}
+            name={field.name}
             defaultCountry="BR"
+            country="BR"
+            international={false}
+            limitMaxLength
             className={cn(
               "flex h-10! rounded-md border border-input bg-background px-3 w-full min-w-0",
               className,
             )}
           />
 
-          <FormMessage />
+          <FormMessage className="absolute right-0 top-full mt-1 text-xs" />
         </FormItem>
       )}
     />

@@ -6,10 +6,11 @@ import {
   getTrainingParticipants,
 } from "./service";
 import { TrainingParticipant } from "./types";
+import { queryKeys } from "../shared/query-keys";
 
 export function useTrainingParticipants(trainingId?: string) {
   return useQuery({
-    queryKey: ["training-participants", trainingId],
+    queryKey: queryKeys.trainingParticipants(trainingId),
     queryFn: () => getTrainingParticipants(trainingId as string),
     enabled: Boolean(trainingId),
   });
@@ -23,7 +24,7 @@ export function useCreateTrainingParticipant(trainingId?: string) {
       createTrainingParticipant(data),
     onSuccess: () =>
       queryClient.invalidateQueries({
-        queryKey: ["training-participants", trainingId],
+        queryKey: queryKeys.trainingParticipants(trainingId),
       }),
   });
 }
@@ -36,7 +37,7 @@ export function useCreateTrainingParticipants(trainingId?: string) {
       createTrainingParticipants(data),
     onSuccess: () =>
       queryClient.invalidateQueries({
-        queryKey: ["training-participants", trainingId],
+        queryKey: queryKeys.trainingParticipants(trainingId),
       }),
   });
 }
@@ -48,7 +49,7 @@ export function useDeleteTrainingParticipant(trainingId?: string) {
     mutationFn: (id: string) => deleteTrainingParticipant(id),
     onSuccess: () =>
       queryClient.invalidateQueries({
-        queryKey: ["training-participants", trainingId],
+        queryKey: queryKeys.trainingParticipants(trainingId),
       }),
   });
 }

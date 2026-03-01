@@ -21,6 +21,8 @@ import {
 } from "lucide-react";
 import { AlertDialogBuilder } from "../builders/AlertDialogBuilder";
 import { Employee } from "@/src/app/modules/employees/types";
+import { cn, formatCPFForDisplay, formatPhoneForDisplay } from "@/lib/utils";
+import { Separator } from "../ui/separator";
 
 interface EmployeeCardProps {
   employee: Employee;
@@ -37,43 +39,38 @@ export function EmployeeCard({
 }: EmployeeCardProps) {
   return (
     <Card className="hover:shadow-lg transition-shadow border-0 shadow-md">
-      <CardHeader className="pb-2">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-3 min-w-0 flex-1">
-            <div className="w-10 h-10 rounded-lg bg-purple-100 flex items-center justify-center shrink-0">
-              <User className="w-5 h-5 text-purple-600" />
+      <CardHeader>
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 pb-3">
+          <div className="flex items-center gap-3 min-w-0 overflow-hidden">
+            <div
+              className={cn(
+                `w-10 h-10 rounded-lg flex items-center justify-center shrink-0`,
+                statusColors[employee.status],
+              )}
+            >
+              <User className="w-5 h-5" />
             </div>
 
-            <div className="min-w-0 flex-1">
-              <CardTitle className="text-lg leading-tight block truncate">
+            <div className="min-w-0 flex-1 overflow-hidden">
+              <CardTitle className="text-lg leading-tight truncate max-w-full">
                 {employee.name}
               </CardTitle>
 
-              <Badge className={`${statusColors[employee.status]} mt-1`}>
-                {employee.status === "active"
-                  ? "Ativo"
-                  : employee.status === "inactive"
-                    ? "Inativo"
-                    : "Afastado"}
-              </Badge>
+              <div className="flex items-center gap-3">
+                <Badge className={`${statusColors[employee.status]} mt-1`}>
+                  {employee.role}
+                </Badge>
+              </div>
             </div>
           </div>
 
-          <div className="shrink-0 ml-2">
+          <div className="shrink-0">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon">
                   <MoreVertical />
                 </Button>
               </DropdownMenuTrigger>
-              {/* <DropdownMenuContent>
-                <DropdownMenuItem onSelect={() => onEdit(employee)}>
-                  <Edit className="mr-2" /> Editar
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => onDelete(employee)}>
-                  <Trash2 className="mr-2" /> Remover
-                </DropdownMenuItem>
-              </DropdownMenuContent> */}
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => onEdit(employee)}>
                   <Edit className="w-4 h-4 mr-2" />
@@ -81,53 +78,50 @@ export function EmployeeCard({
                 </DropdownMenuItem>
 
                 <AlertDialogBuilder
-                  title="Remover ambiente"
-                  description={`Tem certeza que deseja remover o ambiente "${employee.name}"?`}
+                  title="Excluir colaborador"
+                  description={`Tem certeza que deseja excluir o colaborador "${employee.name}"?`}
                   onConfirm={() => onDelete(employee)}
+                  variant="destructive"
                 >
                   <DropdownMenuItem
                     onSelect={(e) => e.preventDefault()}
                     className="text-red-600 focus:text-red-600"
                   >
                     <Trash2 className="w-4 h-4 mr-2" />
-                    Remover
+                    Excluir
                   </DropdownMenuItem>
                 </AlertDialogBuilder>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
         </div>
+        <Separator />
       </CardHeader>
 
-      <CardContent className="space-y-2">
-        <div className="flex items-center gap-2 text-sm text-slate-500">
-          <span className="font-medium">CPF:</span> {employee.cpf}
+      <CardContent className="pt-3 space-y-2">
+        <div className="flex items-center gap-2 text-sm text-slate-600">
+          <span className="font-medium">CPF:</span>{" "}
+          {formatCPFForDisplay(employee.cpf)}
         </div>
 
         {employee.job_title && (
-          <div className="flex items-center gap-2 text-sm text-slate-500">
+          <div className="flex items-center gap-2 text-sm text-slate-600">
             <Briefcase className="w-4 h-4 shrink-0" />
             <span>{employee.job_title}</span>
           </div>
         )}
 
-        {employee.role && (
-          <div className="flex items-center gap-2 text-sm text-slate-500">
-            <span className="text-xs">Função:</span> {employee.role}
-          </div>
-        )}
-
         {employee.company && (
-          <div className="flex items-center gap-2 text-sm text-slate-500">
+          <div className="flex items-center gap-2 text-sm text-slate-600">
             <Building2 className="w-4 h-4 shrink-0" />
-            <span className="break-words">{employee.company}</span>
+            <span className="wrap-break-word">{employee.company}</span>
           </div>
         )}
 
         {employee.phone && (
-          <div className="flex items-center gap-2 text-sm text-slate-500">
+          <div className="flex items-center gap-2 text-sm text-slate-600">
             <Phone className="w-4 h-4 shrink-0" />
-            <span>{employee.phone}</span>
+            <span>{formatPhoneForDisplay(employee.phone)}</span>
           </div>
         )}
       </CardContent>

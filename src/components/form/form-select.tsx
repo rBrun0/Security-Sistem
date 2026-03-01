@@ -28,6 +28,8 @@ export function FormSelect<T extends FieldValues>({
   placeholder,
   triggerClassName,
   containerClassName,
+  onValueChange,
+  disabled,
 }: {
   name: Path<T>;
   control: Control<T>;
@@ -36,21 +38,30 @@ export function FormSelect<T extends FieldValues>({
   placeholder?: string;
   triggerClassName?: string;
   containerClassName?: string;
+  onValueChange?: (value: string) => void;
+  disabled?: boolean;
 }) {
   return (
     <FormField
       control={control}
       name={name}
       render={({ field }) => (
-        <FormItem className={containerClassName}>
+        <FormItem className={`relative ${containerClassName ?? ""}`}>
           {label && <FormLabel>{label}</FormLabel>}
 
           <Select
-            onValueChange={field.onChange}
+            onValueChange={(value) => {
+              field.onChange(value);
+              onValueChange?.(value);
+            }}
             value={field.value || undefined}
+            disabled={disabled}
           >
             <FormControl>
-              <SelectTrigger className={cn("w-full", triggerClassName)}>
+              <SelectTrigger
+                className={cn("w-full", triggerClassName)}
+                disabled={disabled}
+              >
                 <SelectValue placeholder={placeholder} />
               </SelectTrigger>
             </FormControl>
@@ -64,7 +75,7 @@ export function FormSelect<T extends FieldValues>({
             </SelectContent>
           </Select>
 
-          <FormMessage />
+          <FormMessage className="absolute right-0 top-full mt-1 text-xs" />
         </FormItem>
       )}
     />

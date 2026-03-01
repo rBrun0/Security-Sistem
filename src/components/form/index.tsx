@@ -4,3 +4,4 @@ export * from "./form-select";
 export * from "./form-checkbox";
 export * from "./formField";
 export * from "./form-phone-input";
+export * from "./form-document-input";

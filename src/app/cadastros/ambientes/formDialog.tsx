@@ -37,7 +37,7 @@ import {
 import { toast } from "sonner";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import {
   FormInput,
   FormPhoneInput,
@@ -55,6 +55,9 @@ import { useEnvironments } from "../../modules/enviroments/hooks";
 import { getActiveEmployees } from "../../modules/employees/service";
 import { useEmployees } from "../../modules/employees/hooks";
 import { Environment } from "../../modules/enviroments/types";
+import { useBrazilStates, useStateCities } from "../../modules/locations/hooks";
+import { isOptionalValidPhone } from "@/lib/utils";
+import { queryKeys } from "../../modules/shared/query-keys";
 
 export const FormDialog = ({
   isOpen,
@@ -75,16 +78,23 @@ export const FormDialog = ({
   const [isLoading, setIsLoading] = useState(false);
 
   const enviromentSchema = z.object({
-    name: z.string().min(1, "Nome é obrigatório"),
-    address: z.string().optional(),
-    city: z.string().optional(),
-    state: z.string().optional(),
-    client: z.string().optional(),
-    responsible: z.string().optional(),
-    phone: z.string().optional(),
-    status: z.enum(["active", "concluded", "paused", "deleted"]),
-    start_date: z.string({ error: "Tipo inválido" }).optional(),
-    expected_end_date: z.string({ error: "Tipo inválido" }).optional(),
+    name: z.string().trim().min(1, "Informe o nome do ambiente."),
+    address: z.string().trim().optional(),
+    city: z.string().trim().optional(),
+    state: z.string().trim().optional(),
+    client: z.string().trim().optional(),
+    responsible: z.string().trim().optional(),
+    phone: z
+      .string()
+      .optional()
+      .refine(isOptionalValidPhone, "Telefone inválido."),
+    status: z.enum(["active", "concluded", "paused", "deleted"], {
+      error: "Status inválido.",
+    }),
+    start_date: z.string({ error: "Data de início inválida." }).optional(),
+    expected_end_date: z
+      .string({ error: "Data prevista de término inválida." })
+      .optional(),
   });
 
   type EnviromentFormData = z.infer<typeof enviromentSchema>;
@@ -96,68 +106,36 @@ export const FormDialog = ({
     },
   });
 
-  // console.log("form data", form.watch());
+  const selectedState = useWatch({
+    control: form.control,
+    name: "state",
+  });
+
+  const { data: states = [], isLoading: loadingStates } = useBrazilStates();
+  const { data: cities = [], isLoading: loadingCities } =
+    useStateCities(selectedState);
 
   const queryClient = useQueryClient();
 
-  // const { data: ambientes = [], isLoading } = useQuery({
-  //   queryKey: ['ambientes'],
-  //   queryFn: () => base44.entities.Ambiente.list()
-  // });
-
   const { data: enviroments = [] } = useEnvironments();
 
-  //   const { data: colaboradores = [] } = useQuery({
-  //     queryKey: ["colaboradores"],
-  //     queryFn: () => base44.entities.Colaborador.list(),
-  //   });
-
   const { data: employees = [] } = useEmployees();
-
-  const createMutation = useMutation({
-    mutationFn: (data) =>
-      new Promise((resolve) => setTimeout(() => resolve(data), 1000)),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["ambientes"] });
-      setIsOpen(false);
-      resetForm();
-      toast.success("Ambiente cadastrado com sucesso!");
-    },
-  });
-
-  // const updateMutation = useMutation({
-  //   mutationFn: ({ id, data }) =>
-  //     new Promise((resolve) => setTimeout(() => resolve({ id, data }), 1000)),
-  //   onSuccess: () => {
-  //     queryClient.invalidateQueries({ queryKey: ["ambientes"] });
-  //     setIsOpen(false);
-  //     setEditingAmbiente(null);
-  //     resetForm();
-  //     toast.success("Ambiente atualizado com sucesso!");
-  //   },
-  // });
-
-  // const deleteMutation = useMutation({
-  //   mutationFn: (id) =>
-  //     new Promise((resolve) => setTimeout(() => resolve(id), 1000)),
-  //   onSuccess: () => {
-  //     queryClient.invalidateQueries({ queryKey: ["ambientes"] });
-  //     toast.success("Ambiente excluído com sucesso!");
-  //   },
-  // });
 
   const resetForm = () => {
     form.reset();
   };
 
   const onSubmit: Parameters<typeof form.handleSubmit>[0] = (data) => {
+    const payload = {
+      ...data,
+      phoneNumber: data.phone,
+    };
+
     if (editingEnvironment) {
-      console.log("Editando");
       try {
         setIsLoading(true);
-        // updateMutation.mutate({ id: editingAmbiente.id, data: formData });
-        updateEnvironment(editingEnvironment.id, data).then(() => {
-          queryClient.invalidateQueries({ queryKey: ["environments"] });
+        updateEnvironment(editingEnvironment.id, payload).then(() => {
+          queryClient.invalidateQueries({ queryKey: queryKeys.environments });
         });
       } finally {
         form.reset();
@@ -167,10 +145,8 @@ export const FormDialog = ({
     } else {
       try {
         setIsLoading(true);
-        console.log("Criando");
-        // createMutation.mutate(formData);
-        createEnvironment(data).then(() => {
-          queryClient.invalidateQueries({ queryKey: ["environments"] });
+        createEnvironment(payload).then(() => {
+          queryClient.invalidateQueries({ queryKey: queryKeys.environments });
         });
       } finally {
         form.reset();
@@ -180,43 +156,19 @@ export const FormDialog = ({
     }
   };
 
-  // const handleEdit = (ambiente) => {
-  //   setEditingAmbiente(ambiente);
-  //   // setFormData({
-  //   //   nome: ambiente.nome || "",
-  //   //   endereco: ambiente.endereco || "",
-  //   //   cidade: ambiente.cidade || "",
-  //   //   estado: ambiente.estado || "",
-  //   //   cliente: ambiente.cliente || "",
-  //   //   responsavel: ambiente.responsavel || "",
-  //   //   telefone: ambiente.telefone || "",
-  //   //   status: ambiente.status || "ativo",
-  //   //   data_inicio: ambiente.data_inicio || "",
-  //   //   data_previsao_fim: ambiente.data_previsao_fim || "",
-  //   // });
-  //   setIsOpen(true);
-  // };
-
-  const getEmployeesCount = async (enviromentId: string) => {
-    return employees.filter((c) => c.environment_id === enviromentId).length;
-  };
-
-  const filteredEnviroments = enviroments.filter(
-    (environment) =>
-      environment.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      environment.client?.toLowerCase().includes(searchTerm.toLowerCase()),
-  );
-
-  const statusColors = {
-    active: "bg-green-100 text-green-700",
-    concluded: "bg-blue-100 text-blue-700",
-    paused: "bg-amber-100 text-amber-700",
-  };
-
   useEffect(() => {
     if (!isOpen) return;
     if (editingEnvironment) {
-      form.reset(editingEnvironment);
+      const legacyPhone =
+        "phone" in editingEnvironment &&
+        typeof editingEnvironment.phone === "string"
+          ? editingEnvironment.phone
+          : "";
+
+      form.reset({
+        ...editingEnvironment,
+        phone: legacyPhone || editingEnvironment.phoneNumber || "",
+      });
     } else {
       form.reset();
       setEditingEnviroment(null);
@@ -227,7 +179,6 @@ export const FormDialog = ({
     <Dialog
       open={isOpen}
       onOpenChange={(open) => {
-        console.log("teste de opne", open);
         setIsOpen(open);
         if (!open) {
           setEditingEnviroment(null);
@@ -240,8 +191,6 @@ export const FormDialog = ({
         <Button
           className="bg-blue-600 hover:bg-blue-700"
           onClick={() => {
-            console.log("sssssssssssss");
-            // setEditingAmbiente(null);
             setEditingEnviroment(null);
             form.reset();
           }}
@@ -274,8 +223,36 @@ export const FormDialog = ({
                 label="Endereço"
               />
               <div className="grid grid-cols-2 gap-4">
-                <FormInput control={form.control} name="city" label="Cidade" />
-                <FormInput control={form.control} name="state" label="Estado" />
+                <FormSelect
+                  control={form.control}
+                  name="state"
+                  label="Estado"
+                  placeholder={loadingStates ? "Carregando..." : "Selecione"}
+                  options={states.map((state) => ({
+                    label: `${state.sigla} - ${state.nome}`,
+                    value: state.sigla,
+                  }))}
+                  onValueChange={() => {
+                    form.setValue("city", "");
+                  }}
+                />
+                <FormSelect
+                  control={form.control}
+                  name="city"
+                  label="Cidade"
+                  disabled={!selectedState || loadingCities}
+                  placeholder={
+                    !selectedState
+                      ? "Selecione o estado"
+                      : loadingCities
+                        ? "Carregando..."
+                        : "Selecione"
+                  }
+                  options={cities.map((city) => ({
+                    label: city.nome,
+                    value: city.nome,
+                  }))}
+                />
               </div>
               <FormInput control={form.control} name="client" label="Cliente" />
               <div className="grid grid-cols-4 gap-4">

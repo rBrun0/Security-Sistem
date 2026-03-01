@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createInstructor, deleteInstructor, getInstructors } from "./service";
+import { queryKeys } from "../shared/query-keys";
 
 export function useInstructors() {
-  return useQuery({ queryKey: ["instructors"], queryFn: getInstructors });
+  return useQuery({ queryKey: queryKeys.instructors, queryFn: getInstructors });
 }
 
 export function useCreateInstructor() {
@@ -11,7 +12,7 @@ export function useCreateInstructor() {
   return useMutation({
     mutationFn: createInstructor,
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["instructors"] }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.instructors }),
   });
 }
 
@@ -21,6 +22,6 @@ export function useDeleteInstrutor() {
   return useMutation({
     mutationFn: deleteInstructor,
     onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: ["instructors"] }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.instructors }),
   });
 }

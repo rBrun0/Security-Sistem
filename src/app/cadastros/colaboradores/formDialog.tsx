@@ -15,7 +15,12 @@ import { Plus, LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
-import { FormInput, FormPhoneInput, FormSelect } from "@/src/components/form";
+import {
+  FormDocumentInput,
+  FormInput,
+  FormPhoneInput,
+  FormSelect,
+} from "@/src/components/form";
 import { Form } from "@/components/ui/form";
 import { FormDatePicker } from "@/src/components/form/form-date-picker";
 import { Employee } from "../../modules/employees/types";
@@ -28,6 +33,7 @@ import {
 } from "../../modules/employees/service";
 import { useEnvironments } from "../../modules/enviroments/hooks";
 import { useCompanies } from "../../modules/companies/hooks";
+import { normalizeDateInputToLocalISO } from "@/src/lib/date";
 
 export const FormDialog = ({
   isOpen,
@@ -64,7 +70,7 @@ export const FormDialog = ({
     admission_date:
       typeof employee.admission_date === "string"
         ? employee.admission_date
-        : new Date(employee.admission_date).toISOString().split("T")[0],
+        : (normalizeDateInputToLocalISO(employee.admission_date) ?? ""),
     status: employee.status,
   });
 
@@ -95,6 +101,8 @@ export const FormDialog = ({
   }, [editingColaborador, form, isOpen, setEditingColaborador]);
 
   const onSubmit = async (data: EmployeeForm) => {
+    let shouldCloseDialog = true;
+
     try {
       setIsLoading(true);
       const payload = toEmployeePayload(data);
@@ -111,12 +119,30 @@ export const FormDialog = ({
       }
       await queryClient.invalidateQueries({ queryKey: ["employees"] });
     } catch (err) {
+      if (err instanceof Error) {
+        const message = err.message.toLowerCase();
+        if (message.includes("cpf")) {
+          form.setError("cpf", { message: err.message });
+          toast.error(err.message);
+          shouldCloseDialog = false;
+          return;
+        }
+        if (message.includes("rg")) {
+          form.setError("rg", { message: err.message });
+          toast.error(err.message);
+          shouldCloseDialog = false;
+          return;
+        }
+      }
+
       toast.error("Erro ao salvar colaborador");
       console.error(err);
     } finally {
       setIsLoading(false);
-      setIsOpen(false);
-      form.reset();
+      if (shouldCloseDialog) {
+        setIsOpen(false);
+        form.reset();
+      }
     }
   };
 
@@ -144,13 +170,13 @@ export const FormDialog = ({
         </Button>
       </DialogTrigger>
 
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[90vh] max-w-lg flex-col p-0">
+        <DialogHeader className="border-b p-6">
           <DialogTitle>
             {editingColaborador ? "Editar Colaborador" : "Novo Colaborador"}
           </DialogTitle>
         </DialogHeader>
-        <div>
+        <div className="flex-1 overflow-y-auto p-3">
           <Form {...form}>
             <form
               onSubmit={form.handleSubmit(onSubmit)}
@@ -163,13 +189,18 @@ export const FormDialog = ({
                 control={form.control}
               />
               <div className="grid grid-cols-2 gap-4">
-                <FormInput name="cpf" label="CPF" control={form.control} />
+                <FormDocumentInput
+                  control={form.control}
+                  name="cpf"
+                  documentType="cpf"
+                  label="CPF"
+                />
                 <FormInput name="rg" label="RG" control={form.control} />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <FormInput
                   name="job_title"
-                  label="Cargo"
+                  label="CBO"
                   control={form.control}
                 />
                 <FormInput name="role" label="Função" control={form.control} />
@@ -231,12 +262,13 @@ export const FormDialog = ({
               type="button"
               variant="outline"
               onClick={() => setIsOpen(false)}
+              className="cursor-pointer"
             >
               Cancelar
             </Button>
             <Button
               type="submit"
-              className="bg-blue-600 hover:bg-blue-700"
+              className="bg-blue-600 hover:bg-blue-700 cursor-pointer"
               form="employee-form"
               disabled={isLoading}
             >

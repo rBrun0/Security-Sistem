@@ -22,14 +22,14 @@ export function FormCheckbox<T extends FieldValues>({
       control={control}
       name={name}
       render={({ field }) => (
-        <FormItem className="flex items-start gap-3">
+        <FormItem className="relative flex items-start gap-3">
           <FormControl>
             <Checkbox checked={field.value} onCheckedChange={field.onChange} />
           </FormControl>
 
           <FormLabel className="font-normal">{label}</FormLabel>
 
-          <FormMessage />
+          <FormMessage className="absolute right-0 top-full mt-1 text-xs" />
         </FormItem>
       )}
     />

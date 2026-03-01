@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createEPIDelivery, getEPIDeliveries } from "./service";
 import { EPIDelivery } from "./types";
+import { queryKeys } from "../shared/query-keys";
 
 export function useEPIDeliveries() {
   return useQuery({
-    queryKey: ["epi-deliveries"],
+    queryKey: queryKeys.epiDeliveries,
     queryFn: getEPIDeliveries,
   });
 }
@@ -15,7 +16,7 @@ export function useCreateEPIDelivery() {
   return useMutation({
     mutationFn: (data: Omit<EPIDelivery, "id">) => createEPIDelivery(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["epi-deliveries"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.epiDeliveries });
     },
   });
 }

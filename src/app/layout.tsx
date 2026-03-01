@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-// import { Toaster } from "@/components/ui/toaster";
+import { Toaster } from "sonner";
 // import { AuthProvider } from "@/lib/AuthContext"
 import "./globals.css";
 import { Providers } from "./providers";
@@ -33,6 +33,7 @@ export default function RootLayout({
       >
         <Providers>
           <Sidebar>{children}</Sidebar>
+          <Toaster />
         </Providers>
       </body>
     </html>

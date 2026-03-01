@@ -3,7 +3,7 @@ export type CompanyStatus = "active" | "inactive" | "deleted";
 export type Company = {
   id: string;
   name: string;
-  document?: string; // CNPJ/CPF
+  document: string;
   description?: string;
   address?: string;
   city?: string;

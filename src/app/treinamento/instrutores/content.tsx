@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Instructors } from "./instructors";
 import { FormDialog } from "./formDialog";
 import { Instrutor } from "../../modules/instructors/types";
+import { PageHeader } from "@/src/components/common";
 
 export const Content = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -13,21 +14,19 @@ export const Content = () => {
 
   return (
     <>
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-800">Instrutores</h1>
-          <p className="text-slate-500 mt-1">
-            Gerenciar instrutores de treinamento
-          </p>
-        </div>
-        <FormDialog
-          key={editingInstructor?.id ?? "new"}
-          isOpen={isOpen}
-          setIsOpen={setIsOpen}
-          editingInstructor={editingInstructor}
-          setEditingInstructor={setEditingInstructor}
-        />
-      </div>
+      <PageHeader
+        title="Instrutores"
+        description="Gerenciar instrutores de treinamento"
+        actions={
+          <FormDialog
+            key={editingInstructor?.id ?? "new"}
+            isOpen={isOpen}
+            setIsOpen={setIsOpen}
+            editingInstructor={editingInstructor}
+            setEditingInstructor={setEditingInstructor}
+          />
+        }
+      />
       <Instructors
         isOpen={isOpen}
         setIsOpen={setIsOpen}

@@ -33,7 +33,7 @@ export function FormSwitch<T extends FieldValues>({
       control={control}
       name={name}
       render={({ field }) => (
-        <FormItem className={containerClassName}>
+        <FormItem className={`relative ${containerClassName ?? ""}`}>
           {label && <FormLabel>{label}</FormLabel>}
 
           <FormControl>
@@ -47,7 +47,7 @@ export function FormSwitch<T extends FieldValues>({
             />
           </FormControl>
 
-          <FormMessage />
+          <FormMessage className="absolute right-0 top-full mt-1 text-xs" />
         </FormItem>
       )}
     />

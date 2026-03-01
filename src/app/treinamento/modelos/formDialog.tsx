@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -183,11 +184,16 @@ export const FormDialog = ({
   setIsOpen: (isOpen: boolean) => void;
 }) => {
   const modeloSchema = z.object({
-    standard: z.string().min(1, "Norma é obrigatória"),
-    name: z.string().min(1, "Nome é obrigatório"),
-    program_content: z.string().min(1, "Conteúdo programático é obrigatório"),
-    workload: z.string().optional(),
-    modality: z.enum(["presencial", "ead", "semipresencial"]),
+    standard: z.string().trim().min(1, "Informe a norma do treinamento."),
+    name: z.string().trim().min(1, "Informe o nome do modelo."),
+    program_content: z
+      .string()
+      .trim()
+      .min(1, "Informe o conteúdo programático."),
+    workload: z.string().trim().optional(),
+    modality: z.enum(["presencial", "ead", "semipresencial"], {
+      error: "Modalidade inválida.",
+    }),
     instructor_id: z.string().optional(),
     technical_responsible_id: z.string().optional(),
     certificate_model: z.string().optional(),
@@ -319,110 +325,119 @@ export const FormDialog = ({
           Novo Modelo
         </Button>
       </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[90vh] max-w-2xl flex-col p-0">
+        <DialogHeader className="border-b p-6">
           <DialogTitle>
             {editingModel ? "Editar Modelo" : "Novo Modelo de Treinamento"}
           </DialogTitle>
         </DialogHeader>
-        <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormSelect
-              name="standard"
-              label="Norma Regulamentadora"
-              control={form.control}
-              options={NORMAS.map((nr) => ({
-                label: nr.label,
-                value: nr.value,
-              }))}
-            />
-
-            <FormInput
-              name="name"
-              label="Nome do Modelo"
-              control={form.control}
-            />
-
-            <FormTextarea
-              name="program_content"
-              label="Conteúdo Programático"
-              control={form.control}
-              placeholder="Descreva o conteúdo programático..."
-            />
-
-            <div className="grid grid-cols-2 gap-4">
-              <FormInput
-                name="workload"
-                label="Carga Horária"
-                control={form.control}
-                placeholder="Ex: 8 horas"
-              />
+        <div className="flex-1 overflow-y-auto p-3">
+          <Form {...form}>
+            <form
+              onSubmit={form.handleSubmit(onSubmit)}
+              className="space-y-4"
+              id="training-model-form"
+            >
               <FormSelect
-                name="modality"
-                label="Modalidade"
+                name="standard"
+                label="Norma Regulamentadora"
+                control={form.control}
+                options={NORMAS.map((nr) => ({
+                  label: nr.label,
+                  value: nr.value,
+                }))}
+              />
+
+              <FormInput
+                name="name"
+                label="Nome do Modelo"
+                control={form.control}
+              />
+
+              <FormTextarea
+                name="program_content"
+                label="Conteúdo Programático"
+                control={form.control}
+                placeholder="Descreva o conteúdo programático..."
+              />
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormInput
+                  name="workload"
+                  label="Carga Horária"
+                  control={form.control}
+                  placeholder="Ex: 8 horas"
+                />
+                <FormSelect
+                  name="modality"
+                  label="Modalidade"
+                  control={form.control}
+                  options={[
+                    { label: "Presencial", value: "presencial" },
+                    { label: "EAD", value: "ead" },
+                    { label: "Semipresencial", value: "semipresencial" },
+                  ]}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <FormSelect
+                  name="instructor_id"
+                  label="Instrutor Padrão"
+                  control={form.control}
+                  options={instrutores
+                    .filter((i) => Boolean(i.id))
+                    .map((i) => ({
+                      label: i.name || "Sem nome",
+                      value: i.id as string,
+                    }))}
+                />
+                <FormSelect
+                  name="technical_responsible_id"
+                  label="Responsável Técnico Padrão"
+                  control={form.control}
+                  options={responsaveis
+                    .filter((r) => Boolean(r.id))
+                    .map((r) => ({
+                      label: r.name || "Sem nome",
+                      value: r.id as string,
+                    }))}
+                />
+              </div>
+
+              <FormSelect
+                name="certificate_model"
+                label="Modelo de Certificado"
                 control={form.control}
                 options={[
-                  { label: "Presencial", value: "presencial" },
-                  { label: "EAD", value: "ead" },
-                  { label: "Semipresencial", value: "semipresencial" },
+                  { label: "Modelo 1 - Clássico", value: "modelo1" },
+                  { label: "Modelo 2 - Moderno", value: "modelo2" },
+                  { label: "Modelo 3 - Executivo", value: "modelo3" },
                 ]}
               />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <FormSelect
-                name="instructor_id"
-                label="Instrutor Padrão"
-                control={form.control}
-                options={instrutores
-                  .filter((i) => Boolean(i.id))
-                  .map((i) => ({
-                    label: i.name || "Sem nome",
-                    value: i.id as string,
-                  }))}
-              />
-              <FormSelect
-                name="technical_responsible_id"
-                label="Responsável Técnico Padrão"
-                control={form.control}
-                options={responsaveis
-                  .filter((r) => Boolean(r.id))
-                  .map((r) => ({
-                    label: r.name || "Sem nome",
-                    value: r.id as string,
-                  }))}
-              />
-            </div>
-
-            <FormSelect
-              name="certificate_model"
-              label="Modelo de Certificado"
-              control={form.control}
-              options={[
-                { label: "Modelo 1 - Clássico", value: "modelo1" },
-                { label: "Modelo 2 - Moderno", value: "modelo2" },
-                { label: "Modelo 3 - Executivo", value: "modelo3" },
-              ]}
-            />
-
-            <div className="flex justify-end gap-3 pt-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsOpen(false)}
-              >
-                Cancelar
-              </Button>
-              <Button
-                type="submit"
-                className="bg-purple-600 hover:bg-purple-700"
-                disabled={createMutation.isPending || updateMutation.isPending}
-              >
-                {editingModel ? "Salvar" : "Criar Modelo"}
-              </Button>
-            </div>
-          </form>
-        </Form>
+            </form>
+          </Form>
+        </div>
+        <DialogFooter className="border-t p-1">
+          <div className="flex justify-end gap-3 py-3">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsOpen(false)}
+              className="cursor-pointer"
+            >
+              Cancelar
+            </Button>
+            <Button
+              type="submit"
+              className="bg-purple-600 hover:bg-purple-700 cursor-pointer"
+              form="training-model-form"
+              disabled={createMutation.isPending || updateMutation.isPending}
+            >
+              {editingModel ? "Salvar" : "Criar Modelo"}
+            </Button>
+          </div>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

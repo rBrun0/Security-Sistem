@@ -64,7 +64,11 @@ export async function getCentralWarehouseById(
 
   if (!snapshot.exists()) return null;
 
-  return normalizeWarehouse(snapshot as unknown as FirestoreDocData);
+  return normalizeWarehouse({
+    id: snapshot.id,
+    ...snapshot.data(),
+    data: () => snapshot.data(),
+  });
 }
 
 export async function createCentralWarehouse(

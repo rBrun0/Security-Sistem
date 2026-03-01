@@ -1,8 +1,6 @@
 "use client";
 
 import { Dispatch, SetStateAction, useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { FileText, Plus, Search } from "lucide-react";
 import {
@@ -11,6 +9,7 @@ import {
 } from "../../modules/models/hooks";
 import { TrainingModel } from "../../modules/models/types";
 import { TrainingModelCard } from "@/components/domains/card-training-model";
+import { EmptyStateCard, LoadingCardGrid } from "@/src/components/common";
 
 export const Modelos = ({
   setEditingModel,
@@ -54,37 +53,17 @@ export const Modelos = ({
       </div>
 
       {isLoading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {[1, 2, 3].map((i) => (
-            <Card key={i} className="animate-pulse">
-              <CardContent className="p-6">
-                <div className="h-6 bg-slate-200 rounded w-3/4 mb-4" />
-                <div className="h-4 bg-slate-200 rounded w-1/2" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        <LoadingCardGrid lineWidths={["w-3/4", "w-1/2"]} />
       ) : filteredModelos.length === 0 ? (
-        <Card className="border-dashed">
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <FileText className="w-12 h-12 text-slate-300 mb-4" />
-            <p className="text-slate-500 text-center">
-              {searchTerm
-                ? "Nenhum modelo encontrado"
-                : "Nenhum modelo cadastrado"}
-            </p>
-            {!searchTerm && (
-              <Button
-                variant="outline"
-                className="mt-4"
-                onClick={() => setIsOpen(true)}
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Criar Primeiro Modelo
-              </Button>
-            )}
-          </CardContent>
-        </Card>
+        <EmptyStateCard
+          icon={FileText}
+          message={
+            searchTerm ? "Nenhum modelo encontrado" : "Nenhum modelo cadastrado"
+          }
+          actionLabel={!searchTerm ? "Criar Primeiro Modelo" : undefined}
+          actionIcon={!searchTerm ? Plus : undefined}
+          onAction={!searchTerm ? () => setIsOpen(true) : undefined}
+        />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredModelos.map((modelo) => (

@@ -4,6 +4,7 @@ export type Inspection = {
   id: string;
   environment_id: string;
   environment_name?: string;
+  isActive: boolean;
 
   inspection_date: string;
   observations?: string;

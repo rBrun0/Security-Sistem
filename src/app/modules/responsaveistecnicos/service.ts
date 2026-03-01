@@ -3,14 +3,20 @@ import {
   doc,
   getDocs,
   getDoc,
-  addDoc,
-  updateDoc,
-  deleteDoc,
+  runTransaction,
   Timestamp,
 } from "firebase/firestore";
 import { db } from "@/src/lib/firebase";
 import { Instructor as InstructorType } from "../instructors/types";
-import { removeUndefinedFields } from "@/lib/utils";
+import {
+  normalizeOptionalPhoneValue,
+  removeUndefinedFields,
+} from "@/lib/utils";
+import {
+  normalizeUniqueDocument,
+  releaseUniqueDocument,
+  reserveUniqueDocument,
+} from "../shared/document-uniqueness";
 
 const technicalResponsiblesCollection = collection(
   db,
@@ -73,22 +79,47 @@ export async function getTechnicalResponsibleById(
   const docRef = doc(db, "technical_responsibles", id);
   const snapshot = await getDoc(docRef);
   if (!snapshot.exists()) return null;
-  return normalizeDocData(snapshot as unknown as FirestoreDocData);
+  return normalizeDocData({
+    id: snapshot.id,
+    ...snapshot.data(),
+    data: () => snapshot.data(),
+  });
 }
 
 export async function createTechnicalResponsible(
   data: Omit<InstructorType, "id">,
 ) {
   const now = Timestamp.now();
+  const normalizedPhone = normalizeOptionalPhoneValue(data.phoneNumber);
+  const normalizedCpf = normalizeUniqueDocument("cpf", data.cpf);
+  const newTechnicalResponsibleRef = doc(technicalResponsiblesCollection);
 
-  return await addDoc(
-    technicalResponsiblesCollection,
-    removeUndefinedFields({
-      ...data,
-      created_at: now,
-      updated_at: now,
-    }),
-  );
+  await runTransaction(db, async (transaction) => {
+    await reserveUniqueDocument({
+      transaction,
+      db,
+      type: "cpf",
+      value: normalizedCpf,
+      ownerCollection: "technical_responsibles",
+      ownerId: newTechnicalResponsibleRef.id,
+      duplicateMessage:
+        "Já existe um responsável técnico cadastrado com este CPF.",
+    });
+
+    transaction.set(
+      newTechnicalResponsibleRef,
+      removeUndefinedFields({
+        ...data,
+        cpf: normalizedCpf || undefined,
+        phoneNumber: normalizedPhone,
+        phone: normalizedPhone,
+        created_at: now,
+        updated_at: now,
+      }),
+    );
+  });
+
+  return newTechnicalResponsibleRef;
 }
 
 export async function updateTechnicalResponsible(
@@ -96,16 +127,84 @@ export async function updateTechnicalResponsible(
   data: Partial<InstructorType>,
 ) {
   const docRef = doc(db, "technical_responsibles", id);
+  const normalizedPhone = normalizeOptionalPhoneValue(data.phoneNumber);
+  const providedCpf =
+    data.cpf !== undefined
+      ? normalizeUniqueDocument("cpf", data.cpf)
+      : undefined;
 
-  return await updateDoc(
-    docRef,
-    removeUndefinedFields({
-      ...data,
-      updated_at: Timestamp.now(),
-    }),
-  );
+  return await runTransaction(db, async (transaction) => {
+    const currentSnapshot = await transaction.get(docRef);
+
+    if (!currentSnapshot.exists()) {
+      throw new Error("Responsável técnico não encontrado.");
+    }
+
+    const currentData = currentSnapshot.data() as Record<string, unknown>;
+    const currentCpf = normalizeUniqueDocument(
+      "cpf",
+      String(currentData.cpf ?? ""),
+    );
+    const nextCpf =
+      providedCpf && providedCpf.length > 0 ? providedCpf : currentCpf;
+
+    await reserveUniqueDocument({
+      transaction,
+      db,
+      type: "cpf",
+      value: nextCpf,
+      ownerCollection: "technical_responsibles",
+      ownerId: id,
+      duplicateMessage:
+        "Já existe um responsável técnico cadastrado com este CPF.",
+    });
+
+    if (currentCpf && currentCpf !== nextCpf) {
+      await releaseUniqueDocument({
+        transaction,
+        db,
+        type: "cpf",
+        value: currentCpf,
+        ownerCollection: "technical_responsibles",
+        ownerId: id,
+      });
+    }
+
+    transaction.update(
+      docRef,
+      removeUndefinedFields({
+        ...data,
+        cpf: providedCpf || undefined,
+        phoneNumber: normalizedPhone,
+        phone: normalizedPhone,
+        updated_at: Timestamp.now(),
+      }),
+    );
+  });
 }
 
 export const deleteTechnicalResponsible = async (id: string) => {
-  await deleteDoc(doc(db, "technical_responsibles", id));
+  const docRef = doc(db, "technical_responsibles", id);
+
+  await runTransaction(db, async (transaction) => {
+    const currentSnapshot = await transaction.get(docRef);
+    if (!currentSnapshot.exists()) return;
+
+    const currentData = currentSnapshot.data() as Record<string, unknown>;
+    const currentCpf = normalizeUniqueDocument(
+      "cpf",
+      String(currentData.cpf ?? ""),
+    );
+
+    await releaseUniqueDocument({
+      transaction,
+      db,
+      type: "cpf",
+      value: currentCpf,
+      ownerCollection: "technical_responsibles",
+      ownerId: id,
+    });
+
+    transaction.delete(docRef);
+  });
 };

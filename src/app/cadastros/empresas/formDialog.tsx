@@ -3,7 +3,6 @@
 import { Dispatch, SetStateAction, useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -12,15 +11,22 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, LoaderCircle } from "lucide-react";
+import { LoaderCircle, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useForm } from "react-hook-form";
-import { FormInput, FormPhoneInput, FormTextarea } from "@/src/components/form";
+import { useForm, useWatch } from "react-hook-form";
+import {
+  FormDocumentInput,
+  FormInput,
+  FormPhoneInput,
+  FormSelect,
+  FormTextarea,
+} from "@/src/components/form";
 import { Form } from "@/components/ui/form";
 import { Company } from "../../modules/companies/types";
 import { CompanyForm, companySchema } from "../../modules/companies/schema";
 import { createCompany, updateCompany } from "../../modules/companies/service";
+import { useBrazilStates, useStateCities } from "../../modules/locations/hooks";
 // import { companySchema, CompanyForm } from "@/app/modules/companies/schema";
 // import { createCompany, updateCompany } from "@/app/modules/companies/service";
 // import { Company } from "@/app/modules/companies/types";
@@ -43,6 +49,15 @@ export const FormDialog = ({
     resolver: zodResolver(companySchema),
     defaultValues: { status: "active" },
   });
+
+  const selectedState = useWatch({
+    control: form.control,
+    name: "state",
+  });
+
+  const { data: states = [], isLoading: loadingStates } = useBrazilStates();
+  const { data: cities = [], isLoading: loadingCities } =
+    useStateCities(selectedState);
 
   const mapCompanyToForm = (company: Company): CompanyForm => ({
     name: company.name,
@@ -67,6 +82,8 @@ export const FormDialog = ({
   }, [editingCompany, form, isOpen, setEditingCompany]);
 
   const onSubmit = async (data: CompanyForm) => {
+    let shouldCloseDialog = true;
+
     try {
       setIsLoading(true);
       if (editingCompany) {
@@ -78,11 +95,20 @@ export const FormDialog = ({
       }
       await queryClient.invalidateQueries({ queryKey: ["companies"] });
     } catch (err) {
+      if (err instanceof Error && err.message.toLowerCase().includes("cnpj")) {
+        form.setError("document", { message: err.message });
+        toast.error(err.message);
+        shouldCloseDialog = false;
+        return;
+      }
+
       toast.error("Erro ao salvar empresa");
     } finally {
       setIsLoading(false);
-      setIsOpen(false);
-      form.reset();
+      if (shouldCloseDialog) {
+        setIsOpen(false);
+        form.reset();
+      }
     }
   };
 
@@ -97,13 +123,26 @@ export const FormDialog = ({
         }
       }}
     >
-      <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogTrigger asChild>
+        <Button
+          className="bg-blue-600 hover:bg-blue-700"
+          onClick={() => {
+            setEditingCompany(null);
+            form.reset({ status: "active" });
+          }}
+        >
+          <Plus className="w-4 h-4 mr-2" />
+          Nova Empresa
+        </Button>
+      </DialogTrigger>
+
+      <DialogContent className="flex max-h-[90vh] max-w-lg flex-col p-0">
+        <DialogHeader className="border-b p-6">
           <DialogTitle>
             {editingCompany ? "Editar Empresa" : "Nova Empresa"}
           </DialogTitle>
         </DialogHeader>
-        <div className="p-3">
+        <div className="flex-1 overflow-y-auto p-3">
           <Form {...form}>
             <form
               onSubmit={form.handleSubmit(onSubmit)}
@@ -111,10 +150,12 @@ export const FormDialog = ({
               id="company-form"
             >
               <FormInput name="name" label="Nome" control={form.control} />
-              <FormInput
+              <FormDocumentInput
                 name="document"
                 label="Documento (CNPJ)"
                 control={form.control}
+                documentType="cnpj"
+                placeholder="00.000.000/0000-00"
               />
               <FormTextarea
                 name="description"
@@ -127,12 +168,40 @@ export const FormDialog = ({
                 control={form.control}
               />
               <div className="grid grid-cols-2 gap-4">
-                <FormInput name="city" label="Cidade" control={form.control} />
-                <FormInput name="state" label="Estado" control={form.control} />
+                <FormSelect
+                  name="state"
+                  label="Estado"
+                  control={form.control}
+                  placeholder={loadingStates ? "Carregando..." : "Selecione"}
+                  options={states.map((state) => ({
+                    label: `${state.sigla} - ${state.nome}`,
+                    value: state.sigla,
+                  }))}
+                  onValueChange={() => {
+                    form.setValue("city", "");
+                  }}
+                />
+                <FormSelect
+                  name="city"
+                  label="Cidade"
+                  control={form.control}
+                  disabled={!selectedState || loadingCities}
+                  placeholder={
+                    !selectedState
+                      ? "Selecione o estado"
+                      : loadingCities
+                        ? "Carregando..."
+                        : "Selecione"
+                  }
+                  options={cities.map((city) => ({
+                    label: city.nome,
+                    value: city.nome,
+                  }))}
+                />
               </div>
               <FormInput
                 name="contact_name"
-                label="Contato"
+                label="Pessoa para contato"
                 control={form.control}
               />
               <FormPhoneInput
@@ -149,12 +218,13 @@ export const FormDialog = ({
               type="button"
               variant="outline"
               onClick={() => setIsOpen(false)}
+              className="cursor-pointer"
             >
               Cancelar
             </Button>
             <Button
               type="submit"
-              className="bg-blue-600 hover:bg-blue-700"
+              className="bg-blue-600 hover:bg-blue-700 cursor-pointer"
               form="company-form"
               disabled={isLoading}
             >

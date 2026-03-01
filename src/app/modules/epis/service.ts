@@ -11,8 +11,33 @@ import {
 import { db } from "@/src/lib/firebase";
 import { removeUndefinedFields } from "@/lib/utils";
 import { EPI } from "./types";
+import { buildEPIIdentityKey } from "./identity";
 
 const episCollection = collection(db, "epis");
+
+const DUPLICATE_EPI_ERROR_CODE = "EPI_DUPLICATE_IN_WAREHOUSE";
+
+export class DuplicateEPIError extends Error {
+  code = DUPLICATE_EPI_ERROR_CODE;
+  existingEpiId: string;
+
+  constructor(existingEpiId: string) {
+    super("Já existe um EPI com esse identificador no estoque informado.");
+    this.name = "DuplicateEPIError";
+    this.existingEpiId = existingEpiId;
+  }
+}
+
+export function isDuplicateEPIError(
+  error: unknown,
+): error is DuplicateEPIError {
+  return Boolean(
+    error &&
+    typeof error === "object" &&
+    "code" in error &&
+    (error as { code?: string }).code === DUPLICATE_EPI_ERROR_CODE,
+  );
+}
 
 type FirestoreDocData = {
   id?: string;
@@ -30,6 +55,7 @@ function normalizeEPI(d: FirestoreDocData): EPI {
     ca: (data.ca ?? "") as string,
     caValidity: (data.ca_validity ?? data.validade_ca) as string | undefined,
     category: (data.category ?? data.categoria) as EPI["category"],
+    isActive: Boolean(data.isActive ?? data.ativo ?? true),
     centralWarehouseId: (data.central_warehouse_id ??
       data.estoque_central_id) as string | undefined,
     centralWarehouseName: (data.central_warehouse_name ??
@@ -48,6 +74,7 @@ function withLegacyMirrors(data: Partial<EPI>) {
     descricao: data.description,
     validade_ca: data.caValidity,
     categoria: data.category,
+    ativo: data.isActive,
     estoque_central_id: data.centralWarehouseId,
     estoque_central_nome: data.centralWarehouseName,
     quantidade: data.quantity,
@@ -73,16 +100,31 @@ export async function getEPIById(id: string): Promise<EPI | null> {
 
   if (!snapshot.exists()) return null;
 
-  return normalizeEPI(snapshot as unknown as FirestoreDocData);
+  return normalizeEPI({
+    id: snapshot.id,
+    ...snapshot.data(),
+    data: () => snapshot.data(),
+  });
 }
 
 export async function createEPI(data: Omit<EPI, "id">) {
+  const incomingKey = buildEPIIdentityKey(data);
+  const snapshot = await getDocs(episCollection);
+  const existingEPI = snapshot.docs
+    .map((d) => normalizeEPI({ id: d.id, ...d.data(), data: () => d.data() }))
+    .find((epi) => buildEPIIdentityKey(epi) === incomingKey);
+
+  if (existingEPI) {
+    throw new DuplicateEPIError(existingEPI.id);
+  }
+
   const now = Timestamp.now();
 
   return await addDoc(
     episCollection,
     removeUndefinedFields({
       ...withLegacyMirrors(data),
+      isActive: data.isActive ?? true,
       created_at: now,
       updated_at: now,
     }),
@@ -90,6 +132,25 @@ export async function createEPI(data: Omit<EPI, "id">) {
 }
 
 export async function updateEPI(id: string, data: Partial<EPI>) {
+  const currentEPI = await getEPIById(id);
+
+  if (currentEPI) {
+    const nextIdentityCandidate: EPI = {
+      ...currentEPI,
+      ...data,
+      id,
+    };
+    const nextKey = buildEPIIdentityKey(nextIdentityCandidate);
+    const snapshot = await getDocs(episCollection);
+    const conflictingEPI = snapshot.docs
+      .map((d) => normalizeEPI({ id: d.id, ...d.data(), data: () => d.data() }))
+      .find((epi) => epi.id !== id && buildEPIIdentityKey(epi) === nextKey);
+
+    if (conflictingEPI) {
+      throw new DuplicateEPIError(conflictingEPI.id);
+    }
+  }
+
   const ref = doc(db, "epis", id);
 
   return await updateDoc(

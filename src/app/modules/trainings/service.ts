@@ -120,7 +120,11 @@ export async function getTrainingById(id: string): Promise<Training | null> {
 
   if (!snapshot.exists()) return null;
 
-  return normalizeTraining(snapshot as unknown as FirestoreDocData);
+  return normalizeTraining({
+    id: snapshot.id,
+    ...snapshot.data(),
+    data: () => snapshot.data(),
+  });
 }
 
 export async function createTraining(data: Omit<Training, "id">) {

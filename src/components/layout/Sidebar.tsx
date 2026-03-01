@@ -33,7 +33,7 @@ const Sidebar = ({ children }: { children: React.ReactNode }) => {
       icon: Users,
       submenu: [
         {
-          title: "Ambientes (Obras)",
+          title: "Ambientes",
           href: "cadastros/ambientes",
         },
         { title: "Empresas", href: "cadastros/empresas" },

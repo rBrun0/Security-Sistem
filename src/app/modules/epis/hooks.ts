@@ -7,17 +7,18 @@ import {
   updateEPI,
 } from "./service";
 import { EPI } from "./types";
+import { queryKeys } from "../shared/query-keys";
 
 export function useEPIs() {
   return useQuery({
-    queryKey: ["epis"],
+    queryKey: queryKeys.epis,
     queryFn: getEPIs,
   });
 }
 
 export function useEPI(id?: string) {
   return useQuery({
-    queryKey: ["epi", id],
+    queryKey: [...queryKeys.epi, id],
     queryFn: () => getEPIById(id as string),
     enabled: Boolean(id),
   });
@@ -29,7 +30,7 @@ export function useCreateEPI() {
   return useMutation({
     mutationFn: (data: Omit<EPI, "id">) => createEPI(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["epis"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.epis });
     },
   });
 }
@@ -41,8 +42,8 @@ export function useUpdateEPI() {
     mutationFn: ({ id, data }: { id: string; data: Partial<EPI> }) =>
       updateEPI(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["epis"] });
-      queryClient.invalidateQueries({ queryKey: ["epi"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.epis });
+      queryClient.invalidateQueries({ queryKey: queryKeys.epi });
     },
   });
 }
@@ -53,7 +54,7 @@ export function useDeleteEPI() {
   return useMutation({
     mutationFn: (id: string) => deleteEPI(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["epis"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.epis });
     },
   });
 }

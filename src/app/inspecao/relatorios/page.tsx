@@ -17,6 +17,11 @@ import { FileText, Download, Calendar, Printer } from "lucide-react";
 import { format } from "date-fns";
 import { useEnvironments } from "../../modules/enviroments/hooks";
 import { useInspections } from "../../modules/inspections/hooks";
+import {
+  EmptyStateCard,
+  LoadingCardGrid,
+  PageHeader,
+} from "@/src/components/common";
 
 export default function RelatoriosInspecaoPage() {
   const [filterObra, setFilterObra] = useState("todas");
@@ -135,19 +140,17 @@ export default function RelatoriosInspecaoPage() {
         `}
       </style>
 
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 no-print">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-800">
-            Relatórios de Inspeção
-          </h1>
-          <p className="text-slate-500 mt-1">
-            Visualize e exporte relatórios das inspeções concluídas
-          </p>
-        </div>
-        <Button onClick={exportToCSV} variant="outline">
-          <Download className="w-4 h-4 mr-2" />
-          Exportar CSV
-        </Button>
+      <div className="no-print">
+        <PageHeader
+          title="Relatórios de Inspeção"
+          description="Visualize e exporte relatórios das inspeções concluídas"
+          actions={
+            <Button onClick={exportToCSV} variant="outline">
+              <Download className="w-4 h-4 mr-2" />
+              Exportar CSV
+            </Button>
+          }
+        />
       </div>
 
       {/* Filters */}
@@ -205,25 +208,19 @@ export default function RelatoriosInspecaoPage() {
 
       {/* List */}
       {isLoading ? (
-        <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
-            <Card key={i} className="animate-pulse">
-              <CardContent className="p-6">
-                <div className="h-6 bg-slate-200 rounded w-1/2 mb-2" />
-                <div className="h-4 bg-slate-200 rounded w-1/3" />
-              </CardContent>
-            </Card>
-          ))}
+        <div className="no-print">
+          <LoadingCardGrid
+            columnsClassName="space-y-4"
+            lineWidths={["w-1/2", "w-1/3"]}
+          />
         </div>
       ) : filteredInspections.length === 0 ? (
-        <Card className="border-dashed no-print">
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <FileText className="w-12 h-12 text-slate-300 mb-4" />
-            <p className="text-slate-500">
-              Nenhuma inspeção concluída encontrada
-            </p>
-          </CardContent>
-        </Card>
+        <div className="no-print">
+          <EmptyStateCard
+            icon={FileText}
+            message="Nenhuma inspeção concluída encontrada"
+          />
+        </div>
       ) : (
         <div className="space-y-4 no-print">
           {filteredInspections.map((inspection) => {
