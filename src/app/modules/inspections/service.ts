@@ -8,6 +8,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { Inspection } from "./types";
+import type { InspectionPhotoFinding } from "./types";
 import { db } from "@/src/lib/firebase";
 import { removeUndefinedFields } from "@/lib/utils";
 
@@ -24,6 +25,7 @@ export type CreateInspectionInput = {
   technical_basis?: string;
   technical_standard?: string;
   photo_urls?: string[];
+  photo_findings?: InspectionPhotoFinding[];
   environment_name?: string;
   total_items?: number;
   conforming_items?: number;
@@ -38,6 +40,35 @@ type FirestoreDocData = {
   data?: () => Record<string, unknown>;
   [key: string]: unknown;
 };
+
+function sanitizePhotoFindings(findings?: InspectionPhotoFinding[]) {
+  if (!Array.isArray(findings)) {
+    return findings;
+  }
+
+  return findings.map((finding) => {
+    const normalizedNormativeItemRef = finding.normative_item_ref?.trim();
+
+    return {
+      photo_url: finding.photo_url,
+      irregularity: finding.irregularity,
+      technical_standard: finding.technical_standard,
+      technical_basis: finding.technical_basis,
+      ...(normalizedNormativeItemRef
+        ? { normative_item_ref: normalizedNormativeItemRef }
+        : {}),
+    };
+  });
+}
+
+function sanitizeInspectionInput<
+  T extends UpdateInspectionInput | CreateInspectionInput,
+>(data: T): T {
+  return {
+    ...data,
+    photo_findings: sanitizePhotoFindings(data.photo_findings),
+  };
+}
 
 function toDate(value: unknown): Date {
   if (value instanceof Date) return value;
@@ -71,6 +102,9 @@ function normalizeInspection(d: FirestoreDocData): Inspection {
     photo_urls: Array.isArray(data.photo_urls)
       ? (data.photo_urls as string[])
       : [],
+    photo_findings: Array.isArray(data.photo_findings)
+      ? (data.photo_findings as InspectionPhotoFinding[])
+      : [],
     status: (data.status ?? "pending") as Inspection["status"],
     record_status: (data.record_status ??
       "active") as Inspection["record_status"],
@@ -86,17 +120,18 @@ function normalizeInspection(d: FirestoreDocData): Inspection {
 
 export async function createInspection(data: CreateInspectionInput) {
   const now = Timestamp.now();
+  const sanitizedData = sanitizeInspectionInput(data);
 
   return await addDoc(
     collectionRef,
     removeUndefinedFields({
-      ...data,
-      isActive: data.isActive ?? true,
-      record_status: data.record_status ?? "active",
-      total_items: data.total_items ?? 0,
-      conforming_items: data.conforming_items ?? 0,
-      non_conforming_items: data.non_conforming_items ?? 0,
-      conformity_percentage: data.conformity_percentage ?? 0,
+      ...sanitizedData,
+      isActive: sanitizedData.isActive ?? true,
+      record_status: sanitizedData.record_status ?? "active",
+      total_items: sanitizedData.total_items ?? 0,
+      conforming_items: sanitizedData.conforming_items ?? 0,
+      non_conforming_items: sanitizedData.non_conforming_items ?? 0,
+      conformity_percentage: sanitizedData.conformity_percentage ?? 0,
       created_at: now,
       updated_at: now,
     }),
@@ -148,6 +183,7 @@ export async function createInspectionDraft(
       technical_basis: initial?.technical_basis,
       technical_standard: initial?.technical_standard,
       photo_urls: initial?.photo_urls ?? [],
+      photo_findings: initial?.photo_findings ?? [],
       isActive: true,
       total_items: 0,
       conforming_items: 0,
@@ -164,11 +200,12 @@ export async function saveInspectionDraft(
   data: UpdateInspectionInput,
 ) {
   const ref = doc(db, "inspections", id);
+  const sanitizedData = sanitizeInspectionInput(data);
 
   return await updateDoc(
     ref,
     removeUndefinedFields({
-      ...data,
+      ...sanitizedData,
       record_status: "draft",
       updated_at: Timestamp.now(),
     }),
@@ -180,11 +217,12 @@ export async function publishInspection(
   data: UpdateInspectionInput,
 ) {
   const ref = doc(db, "inspections", id);
+  const sanitizedData = sanitizeInspectionInput(data);
 
   return await updateDoc(
     ref,
     removeUndefinedFields({
-      ...data,
+      ...sanitizedData,
       record_status: "active",
       isActive: true,
       updated_at: Timestamp.now(),
@@ -241,10 +279,11 @@ export async function updateInspection(
   data: UpdateInspectionInput,
 ) {
   const ref = doc(db, "inspections", id);
+  const sanitizedData = sanitizeInspectionInput(data);
   return await updateDoc(
     ref,
     removeUndefinedFields({
-      ...data,
+      ...sanitizedData,
       updated_at: Timestamp.now(),
     }),
   );

@@ -1,6 +1,14 @@
 export type InspectionStatus = "pending" | "completed" | "approved";
 export type InspectionRecordStatus = "draft" | "active";
 
+export type InspectionPhotoFinding = {
+  photo_url: string;
+  irregularity: string;
+  technical_standard: string;
+  technical_basis: string;
+  normative_item_ref?: string;
+};
+
 export type Inspection = {
   id: string;
   environment_id: string;
@@ -14,6 +22,7 @@ export type Inspection = {
   technical_basis?: string;
   technical_standard?: string;
   photo_urls?: string[];
+  photo_findings?: InspectionPhotoFinding[];
 
   status: InspectionStatus;
 
