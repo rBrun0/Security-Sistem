@@ -50,13 +50,17 @@ export const FormDialog = ({
 
   const form = useForm<InspectionForm>({
     resolver: zodResolver(inspectionSchema),
-    defaultValues: { status: "pending" },
+    defaultValues: { status: "pending", photo_urls: [] },
   });
 
   const mapInspectionToForm = (inspection: Inspection): InspectionForm => ({
     environment_id: inspection.environment_id,
     inspection_date: inspection.inspection_date,
     observations: inspection.observations,
+    irregularity: inspection.irregularity,
+    technical_basis: inspection.technical_basis,
+    technical_standard: inspection.technical_standard,
+    photo_urls: inspection.photo_urls ?? [],
     status: inspection.status,
   });
 
@@ -69,6 +73,10 @@ export const FormDialog = ({
       environment_id: data.environment_id,
       inspection_date: data.inspection_date,
       observations: data.observations,
+      irregularity: data.irregularity,
+      technical_basis: data.technical_basis,
+      technical_standard: data.technical_standard,
+      photo_urls: data.photo_urls,
       status: data.status,
       environment_name: env?.name || "",
     };
@@ -82,6 +90,7 @@ export const FormDialog = ({
       form.reset({
         status: "pending",
         inspection_date: todayLocalISODate(),
+        photo_urls: [],
       });
       setEditingInspection(null);
     }
@@ -131,6 +140,7 @@ export const FormDialog = ({
             form.reset({
               status: "pending",
               inspection_date: todayLocalISODate(),
+              photo_urls: [],
             });
           }}
         >

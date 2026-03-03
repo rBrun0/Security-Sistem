@@ -2,6 +2,7 @@ import {
   collection,
   addDoc,
   getDocs,
+  getDoc,
   updateDoc,
   doc,
   Timestamp,
@@ -17,7 +18,12 @@ export type CreateInspectionInput = {
   inspection_date: string;
   status: Inspection["status"];
   isActive?: boolean;
+  record_status?: Inspection["record_status"];
   observations?: string;
+  irregularity?: string;
+  technical_basis?: string;
+  technical_standard?: string;
+  photo_urls?: string[];
   environment_name?: string;
   total_items?: number;
   conforming_items?: number;
@@ -58,7 +64,16 @@ function normalizeInspection(d: FirestoreDocData): Inspection {
       (data.environment_name as string | undefined) ?? undefined,
     inspection_date: String(data.inspection_date ?? ""),
     observations: (data.observations as string | undefined) ?? undefined,
+    irregularity: (data.irregularity as string | undefined) ?? undefined,
+    technical_basis: (data.technical_basis as string | undefined) ?? undefined,
+    technical_standard:
+      (data.technical_standard as string | undefined) ?? undefined,
+    photo_urls: Array.isArray(data.photo_urls)
+      ? (data.photo_urls as string[])
+      : [],
     status: (data.status ?? "pending") as Inspection["status"],
+    record_status: (data.record_status ??
+      "active") as Inspection["record_status"],
     isActive: Boolean(data.isActive ?? true),
     total_items: Number(data.total_items ?? 0),
     conforming_items: Number(data.conforming_items ?? 0),
@@ -77,6 +92,7 @@ export async function createInspection(data: CreateInspectionInput) {
     removeUndefinedFields({
       ...data,
       isActive: data.isActive ?? true,
+      record_status: data.record_status ?? "active",
       total_items: data.total_items ?? 0,
       conforming_items: data.conforming_items ?? 0,
       non_conforming_items: data.non_conforming_items ?? 0,
@@ -95,6 +111,129 @@ export async function getInspections() {
       normalizeInspection({ id: d.id, ...d.data(), data: () => d.data() }),
     )
     .sort((a, b) => b.inspection_date.localeCompare(a.inspection_date));
+}
+
+export async function getInspectionById(
+  id: string,
+): Promise<Inspection | null> {
+  const ref = doc(db, "inspections", id);
+  const snapshot = await getDoc(ref);
+
+  if (!snapshot.exists()) {
+    return null;
+  }
+
+  return normalizeInspection({
+    id: snapshot.id,
+    ...snapshot.data(),
+    data: () => snapshot.data(),
+  });
+}
+
+export async function createInspectionDraft(
+  initial?: Partial<CreateInspectionInput>,
+) {
+  const now = Timestamp.now();
+
+  return await addDoc(
+    collectionRef,
+    removeUndefinedFields({
+      environment_id: initial?.environment_id ?? "",
+      environment_name: initial?.environment_name,
+      inspection_date: initial?.inspection_date ?? "",
+      status: initial?.status ?? "pending",
+      record_status: "draft",
+      observations: initial?.observations,
+      irregularity: initial?.irregularity,
+      technical_basis: initial?.technical_basis,
+      technical_standard: initial?.technical_standard,
+      photo_urls: initial?.photo_urls ?? [],
+      isActive: true,
+      total_items: 0,
+      conforming_items: 0,
+      non_conforming_items: 0,
+      conformity_percentage: 0,
+      created_at: now,
+      updated_at: now,
+    }),
+  );
+}
+
+export async function saveInspectionDraft(
+  id: string,
+  data: UpdateInspectionInput,
+) {
+  const ref = doc(db, "inspections", id);
+
+  return await updateDoc(
+    ref,
+    removeUndefinedFields({
+      ...data,
+      record_status: "draft",
+      updated_at: Timestamp.now(),
+    }),
+  );
+}
+
+export async function publishInspection(
+  id: string,
+  data: UpdateInspectionInput,
+) {
+  const ref = doc(db, "inspections", id);
+
+  return await updateDoc(
+    ref,
+    removeUndefinedFields({
+      ...data,
+      record_status: "active",
+      isActive: true,
+      updated_at: Timestamp.now(),
+    }),
+  );
+}
+
+export async function uploadInspectionPhotos(
+  inspectionId: string,
+  files: File[],
+): Promise<string[]> {
+  const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
+  const uploadPreset = process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET;
+
+  if (!cloudName || !uploadPreset) {
+    throw new Error("Cloudinary não configurado");
+  }
+
+  const uploadedUrls: string[] = [];
+
+  for (const file of files) {
+    const formData = new FormData();
+    formData.append("file", file);
+    formData.append("upload_preset", uploadPreset);
+    formData.append("folder", `inspections/${inspectionId}`);
+
+    const response = await fetch(
+      `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
+      {
+        method: "POST",
+        body: formData,
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error("Falha no upload para o Cloudinary");
+    }
+
+    const data = (await response.json()) as { secure_url?: string };
+    const url = data.secure_url;
+
+    if (!url) {
+      throw new Error("Cloudinary retornou URL inválida");
+    }
+
+    uploadedUrls.push(url);
+  }
+
+  return uploadedUrls;
 }
 
 export async function updateInspection(

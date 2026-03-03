@@ -1,6 +1,7 @@
 "use client";
 
-import { Dispatch, SetStateAction, useState } from "react";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { Input } from "@/components/ui/input";
 import { Search, Plus, ClipboardCheck } from "lucide-react";
@@ -13,28 +14,20 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useInspections } from "../../modules/inspections/hooks";
-import { useEnvironments } from "../../modules/enviroments/hooks";
-import { Inspection } from "../../modules/inspections/types";
 import { deleteInspection } from "../../modules/inspections/service";
 import { InspectionCard } from "@/components/domains/card-inspection";
 import { EmptyStateCard, LoadingCardGrid } from "@/src/components/common";
+import { queryKeys } from "../../modules/shared/query-keys";
+import { createPageUrl } from "@/lib/utils";
 
-export const Inspecoes = ({
-  setEditingInspection,
-  isOpen,
-  setIsOpen,
-}: {
-  setEditingInspection: Dispatch<SetStateAction<Inspection | null>>;
-  isOpen: boolean;
-  setIsOpen: (isOpen: boolean) => void;
-}) => {
+export const Inspecoes = () => {
+  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("todos");
 
   const queryClient = useQueryClient();
 
   const { data: inspections = [], isLoading } = useInspections();
-  const { data: environments = [] } = useEnvironments();
 
   const filtered = inspections.filter((i) => {
     const matchActive = i.isActive !== false;
@@ -88,7 +81,11 @@ export const Inspecoes = ({
           }
           actionLabel={!searchTerm ? "Cadastrar Primeira Inspeção" : undefined}
           actionIcon={!searchTerm ? Plus : undefined}
-          onAction={!searchTerm ? () => setIsOpen(true) : undefined}
+          onAction={
+            !searchTerm
+              ? () => router.push(createPageUrl("inspecao/inspecoes/nova"))
+              : undefined
+          }
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -97,15 +94,16 @@ export const Inspecoes = ({
               key={inspection.id}
               inspection={inspection}
               statusColors={statusColors}
-              onEdit={(insp) => {
-                setEditingInspection(insp);
-                setIsOpen(true);
-              }}
+              onEdit={(insp) =>
+                router.push(
+                  createPageUrl(`inspecao/inspecoes/${insp.id}/editar`),
+                )
+              }
               onDelete={async (insp) => {
                 try {
                   await deleteInspection(insp.id);
                   await queryClient.invalidateQueries({
-                    queryKey: ["inspections"],
+                    queryKey: queryKeys.inspections,
                   });
                   toast.success("Inspeção inativada");
                 } catch (err) {

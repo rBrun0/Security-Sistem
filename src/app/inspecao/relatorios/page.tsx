@@ -70,12 +70,13 @@ export default function RelatoriosInspecaoPage() {
   });
 
   const filteredInspections = inspections.filter((inspection) => {
+    const matchPublished = inspection.record_status !== "draft";
     const matchObra =
       filterObra === "todas" || inspection.environment_id === filterObra;
     // || inspection.ambiente_id === filterObra;
     const matchDateFrom = !dateFrom || inspection.inspection_date >= dateFrom;
     const matchDateTo = !dateTo || inspection.inspection_date <= dateTo;
-    return matchObra && matchDateFrom && matchDateTo;
+    return matchPublished && matchObra && matchDateFrom && matchDateTo;
   });
 
   const getItensForInspecao = (inspectionId: string) => {

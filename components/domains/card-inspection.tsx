@@ -48,13 +48,25 @@ export function InspectionCard({
                 {inspection.environment_name || "Inspeção"}
               </CardTitle>
 
-              <Badge className={`${statusColors[inspection.status]} mt-1`}>
-                {inspection.status === "pending"
-                  ? "Pendente"
-                  : inspection.status === "completed"
-                    ? "Concluída"
-                    : "Aprovada"}
-              </Badge>
+              <div className="mt-1 flex items-center gap-2">
+                <Badge className={`${statusColors[inspection.status]} mt-1`}>
+                  {inspection.status === "pending"
+                    ? "Pendente"
+                    : inspection.status === "completed"
+                      ? "Concluída"
+                      : "Aprovada"}
+                </Badge>
+                <Badge
+                  variant="outline"
+                  className={
+                    inspection.record_status === "draft"
+                      ? "border-amber-300 bg-amber-50 text-amber-700"
+                      : "border-emerald-300 bg-emerald-50 text-emerald-700"
+                  }
+                >
+                  {inspection.record_status === "draft" ? "Rascunho" : "Ativa"}
+                </Badge>
+              </div>
             </div>
           </div>
 

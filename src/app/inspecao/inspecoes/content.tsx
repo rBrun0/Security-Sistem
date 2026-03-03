@@ -1,37 +1,28 @@
 "use client";
 
-import { useState } from "react";
-import { Inspection } from "../../modules/inspections/types";
-import { FormDialog } from "./formDialog";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
+import { createPageUrl } from "@/lib/utils";
 import { Inspecoes } from "./inspecoes";
 import { PageHeader } from "@/src/components/common";
 
 export const Content = () => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [editingInspection, setEditingInspection] = useState<Inspection | null>(
-    null,
-  );
-
   return (
     <>
       <PageHeader
         title="Inspeções"
         description="Gerencie as inspeções de segurança"
         actions={
-          <FormDialog
-            key={editingInspection?.id ?? "new"}
-            isOpen={isOpen}
-            setIsOpen={setIsOpen}
-            editingInspection={editingInspection}
-            setEditingInspection={setEditingInspection}
-          />
+          <Button asChild className="bg-emerald-600 hover:bg-emerald-700">
+            <Link href={createPageUrl("inspecao/inspecoes/nova")}>
+              <Plus className="mr-2 h-4 w-4" />
+              Nova Inspeção
+            </Link>
+          </Button>
         }
       />
-      <Inspecoes
-        isOpen={isOpen}
-        setIsOpen={setIsOpen}
-        setEditingInspection={setEditingInspection}
-      />
+      <Inspecoes />
     </>
   );
 };

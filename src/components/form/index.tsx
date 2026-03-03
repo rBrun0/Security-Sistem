@@ -5,3 +5,4 @@ export * from "./form-checkbox";
 export * from "./formField";
 export * from "./form-phone-input";
 export * from "./form-document-input";
+export * from "./form-date-picker";
